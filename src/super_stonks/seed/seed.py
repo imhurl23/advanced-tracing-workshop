@@ -18,6 +18,7 @@ Sessions are a mix of single- and multi-turn (see scenarios.py).
 from __future__ import annotations
 
 import argparse
+import os
 import uuid
 from typing import Any
 
@@ -131,9 +132,17 @@ def main() -> None:
     parser.add_argument("--count", type=int, default=10, help="number of sessions/traces to seed")
     parser.add_argument("--scenario-set", choices=["workshop", "patterns"], default="workshop")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--gateway", action="store_true", help="use Braintrust Gateway with BRAINTRUST_API_KEY")
     args = parser.parse_args()
     if args.count < 1:
         parser.error("count must be positive")
+    if args.gateway:
+        key = os.environ.get("BRAINTRUST_API_KEY", "").strip()
+        if not key:
+            parser.error("--gateway requires BRAINTRUST_API_KEY")
+        # Applied before importing the graph, whose OpenAI client reads these.
+        os.environ["OPENAI_BASE_URL"] = "https://gateway.braintrust.dev"
+        os.environ["OPENAI_API_KEY"] = key
     run(args.count, args.scenario_set, args.seed)
 
 

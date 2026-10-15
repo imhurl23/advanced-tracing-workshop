@@ -65,8 +65,11 @@ SDK credentials from `.env`.
 
 ## Real agent probes
 
-Set `OPENAI_API_KEY` and `BRAINTRUST_API_KEY` in `.env` as usual, and export your
-destination project. Then run:
+Set `BRAINTRUST_API_KEY` in `.env` or the environment and export your destination
+project. The real-probe Make target uses [Braintrust Gateway](https://www.braintrust.dev/docs/deploy/gateway)
+with the Braintrust key, so no local `OPENAI_API_KEY` is needed. The key must have
+access to the destination organization and an OpenAI provider configured there.
+Then run:
 
 ```bash
 make seed-patterns-live COUNT=80
@@ -77,6 +80,10 @@ come from the actual graph, `gpt-4o-mini`, and yfinance. Spans carry `synthetic:
 `probe_*` buckets identify what was tested, not whether the real agent failed. This
 uses paid model calls and network market-data requests. Real runs may refuse bad
 requests correctly or exhibit different failures; inspect their actual outputs.
+
+The CLI's `--gateway` option configures the OpenAI client for
+`https://gateway.braintrust.dev` before importing the graph. Without that option,
+the original workshop agent still uses its usual OpenAI configuration.
 
 Use the synthetic run ID or `metadata.synthetic` to distinguish scripted evidence
 from observed behavior when analyzing the mixed project.

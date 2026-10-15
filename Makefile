@@ -115,7 +115,7 @@ seed-patterns-upload:
 
 seed-patterns-live:
 	$(PROJECT_GUARD)
-	uv run python -m super_stonks.seed.seed --scenario-set patterns --count $(COUNT)
+	uv run python -m super_stonks.seed.seed --scenario-set patterns --count $(COUNT) --gateway
 
 # Provision = the topics + smoke verify gate (alias for seed-smoke).
 .PHONY: provision
