@@ -42,6 +42,7 @@ Use these resources to set the workshop up again and run it:
 | --- | --- |
 | [`docs/WORKSHOP.md`](docs/WORKSHOP.md) | Presenter run-of-show — the `bt` CLI tour and the end-to-end flow, section by section. |
 | [`docs/SEEDING_MILESTONES.md`](docs/SEEDING_MILESTONES.md) | Build plan for provisioning the shared, pre-seeded `super-stonks` project (Topics + ~1,000 traces) and the trace/scorer design. |
+| [`docs/PATTERN_SEEDING.md`](docs/PATTERN_SEEDING.md) | High-volume synthetic failure traces and real agent probes for Patterns. |
 | [`docs/GAP.md`](docs/GAP.md) | The details of the intentional failure and exactly how to close it. Keep this one to yourself — it's the answer key. |
 | [`docs/WELCOME.md`](docs/WELCOME.md) | Attendee install/welcome screen. |
 | [`AGENTS.md`](AGENTS.md) | Single source of truth for coding-agent guidance, conventions, and the shared-seed vs. own-project split. |

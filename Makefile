@@ -48,6 +48,9 @@ help:
 	@echo "  make topics        enable Topics on your project (M2)"
 	@echo "  make seed-smoke    enable Topics (upstream) + seed 10 traces, then verify (M2→M3)"
 	@echo "  make seed          seed COUNT traces (default 500; runs seed-smoke first) (M3)"
+	@echo "  make seed-patterns generate 5,000 synthetic sessions locally (no API calls)"
+	@echo "  make seed-patterns-upload upload synthetic sessions to your exported project"
+	@echo "  make seed-patterns-live COUNT=80 run real agent on failure-oriented inputs"
 	@echo "  make provision     alias for seed-smoke — the topics + smoke verify gate"
 	@echo "  make copy-dataset DATASET=<name>   copy a super-stonks dataset to all other org projects"
 	@echo ""
@@ -100,6 +103,19 @@ seed: seed-smoke
 	$(PROJECT_GUARD)
 	$(call require_script,src/super_stonks/seed/seed.py,M3)
 	uv run python -m super_stonks.seed.seed --count $(COUNT)
+
+# Optional Patterns traffic; original workshop seeding remains unchanged.
+.PHONY: seed-patterns seed-patterns-upload seed-patterns-live
+seed-patterns:
+	uv run python -m super_stonks.seed.patterns
+
+seed-patterns-upload:
+	$(PROJECT_GUARD)
+	uv run python -m super_stonks.seed.patterns --upload
+
+seed-patterns-live:
+	$(PROJECT_GUARD)
+	uv run python -m super_stonks.seed.seed --scenario-set patterns --count $(COUNT)
 
 # Provision = the topics + smoke verify gate (alias for seed-smoke).
 .PHONY: provision

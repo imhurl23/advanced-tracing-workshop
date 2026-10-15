@@ -27,7 +27,6 @@ load_dotenv()  # OPENAI_API_KEY (agent) + BRAINTRUST_API_KEY (SDK)
 
 import braintrust
 
-from super_stonks.agent.agent import graph
 from super_stonks.agent.config import get_braintrust_project_name, init_braintrust_logger
 from super_stonks.seed.scenarios import build
 
@@ -52,6 +51,8 @@ def _extract_tool_names(messages: list[dict[str, Any]]) -> list[str]:
 
 
 def _seed_session(scenario: dict, project: str) -> None:
+    from super_stonks.agent.agent import graph
+
     conversation_id = str(uuid.uuid4())
     with braintrust.start_span(
         name="stonks-sessions",
@@ -61,6 +62,7 @@ def _seed_session(scenario: dict, project: str) -> None:
             "conversation_id": conversation_id,
             "project": project,
             "bucket": scenario["bucket"],
+            "synthetic": False,
         },
     ) as session:
         agent_messages: list[dict] = []
@@ -100,10 +102,19 @@ def _seed_session(scenario: dict, project: str) -> None:
     braintrust.flush()
 
 
-def run(count: int) -> None:
+def run(count: int, scenario_set: str = "workshop", seed: int = 0) -> None:
     init_braintrust_logger()  # sets the active logger → spans land in the project
     project = get_braintrust_project_name()
-    scenarios = build(count)
+    if scenario_set == "patterns":
+        from super_stonks.seed.patterns import FAILURES, build as build_patterns
+
+        # Use only the adversarial user inputs. Outputs/tools come from the real
+        # unmodified graph; scenario buckets are test intents, not observed failures.
+        candidates = build_patterns((count + len(FAILURES) - 1) // len(FAILURES), 0, seed)
+        scenarios = [{"bucket": f"probe_{s['bucket']}",
+                      "turns": [t["input"] for t in s["turns"]]} for s in candidates[:count]]
+    else:
+        scenarios = build(count, seed)
     turns_total = sum(len(s["turns"]) for s in scenarios)
     print(f"[seed] seeding {len(scenarios)} sessions ({turns_total} turns) into '{project}' …")
 
@@ -118,7 +129,12 @@ def run(count: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Super Stonks traces.")
     parser.add_argument("--count", type=int, default=10, help="number of sessions/traces to seed")
-    run(parser.parse_args().count)
+    parser.add_argument("--scenario-set", choices=["workshop", "patterns"], default="workshop")
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
+    if args.count < 1:
+        parser.error("count must be positive")
+    run(args.count, args.scenario_set, args.seed)
 
 
 if __name__ == "__main__":
