@@ -84,6 +84,10 @@ requests correctly or exhibit different failures; inspect their actual outputs.
 The CLI's `--gateway` option configures the OpenAI client for
 `https://gateway.braintrust.dev` before importing the graph. Without that option,
 the original workshop agent still uses its usual OpenAI configuration.
+Gateway model requests have a 45-second timeout with no automatic retries during
+seeding. The Make target runs eight independent sessions concurrently; use
+`--workers 1` on the CLI for serial execution. Failed sessions remain visible as
+trace errors and are counted separately in the final summary.
 
 Use the synthetic run ID or `metadata.synthetic` to distinguish scripted evidence
 from observed behavior when analyzing the mixed project.

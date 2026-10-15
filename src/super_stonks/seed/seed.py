@@ -18,6 +18,7 @@ Sessions are a mix of single- and multi-turn (see scenarios.py).
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 import uuid
 from typing import Any
@@ -103,7 +104,7 @@ def _seed_session(scenario: dict, project: str) -> None:
     braintrust.flush()
 
 
-def run(count: int, scenario_set: str = "workshop", seed: int = 0) -> None:
+def run(count: int, scenario_set: str = "workshop", seed: int = 0, workers: int = 1) -> None:
     init_braintrust_logger()  # sets the active logger → spans land in the project
     project = get_braintrust_project_name()
     if scenario_set == "patterns":
@@ -119,12 +120,21 @@ def run(count: int, scenario_set: str = "workshop", seed: int = 0) -> None:
     turns_total = sum(len(s["turns"]) for s in scenarios)
     print(f"[seed] seeding {len(scenarios)} sessions ({turns_total} turns) into '{project}' …")
 
-    for i, scenario in enumerate(scenarios, start=1):
-        _seed_session(scenario, project)
-        if i % 25 == 0 or i == len(scenarios):
-            print(f"  {i}/{len(scenarios)}")
+    errors = 0
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_seed_session, scenario, project) for scenario in scenarios]
+        for i, future in enumerate(as_completed(futures), start=1):
+            try:
+                future.result()
+            except Exception as exc:
+                errors += 1
+                print(f"  session failed: {type(exc).__name__}", flush=True)
+            if i % 10 == 0 or i == len(scenarios):
+                print(f"  {i}/{len(scenarios)} ({errors} failed)", flush=True)
 
-    print("[seed] done.")
+    print(f"[seed] done: {count - errors} completed; {errors} failed.")
+    if errors:
+        raise SystemExit(1)
 
 
 def main() -> None:
@@ -133,9 +143,10 @@ def main() -> None:
     parser.add_argument("--scenario-set", choices=["workshop", "patterns"], default="workshop")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--gateway", action="store_true", help="use Braintrust Gateway with BRAINTRUST_API_KEY")
+    parser.add_argument("--workers", type=int, default=1, help="concurrent independent sessions")
     args = parser.parse_args()
-    if args.count < 1:
-        parser.error("count must be positive")
+    if args.count < 1 or args.workers < 1:
+        parser.error("count and workers must be positive")
     if args.gateway:
         key = os.environ.get("BRAINTRUST_API_KEY", "").strip()
         if not key:
@@ -143,7 +154,11 @@ def main() -> None:
         # Applied before importing the graph, whose OpenAI client reads these.
         os.environ["OPENAI_BASE_URL"] = "https://gateway.braintrust.dev"
         os.environ["OPENAI_API_KEY"] = key
-    run(args.count, args.scenario_set, args.seed)
+        from super_stonks.agent import agent
+
+        # Bound stalled gateway requests during a batch; keep failures in traces.
+        agent._client = agent._client.with_options(timeout=45, max_retries=0)
+    run(args.count, args.scenario_set, args.seed, args.workers)
 
 
 if __name__ == "__main__":
