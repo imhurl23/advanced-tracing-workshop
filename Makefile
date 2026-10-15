@@ -51,6 +51,7 @@ help:
 	@echo "  make seed-patterns generate 5,000 synthetic sessions locally (no API calls)"
 	@echo "  make seed-patterns-upload upload synthetic sessions to your exported project"
 	@echo "  make seed-patterns-live COUNT=80 run real agent on failure-oriented inputs"
+	@echo "  make seed-recurring-live COUNT=1200 run focused real probes across three recurring behaviors"
 	@echo "  make provision     alias for seed-smoke — the topics + smoke verify gate"
 	@echo "  make copy-dataset DATASET=<name>   copy a super-stonks dataset to all other org projects"
 	@echo ""
@@ -105,7 +106,7 @@ seed: seed-smoke
 	uv run python -m super_stonks.seed.seed --count $(COUNT)
 
 # Optional Patterns traffic; original workshop seeding remains unchanged.
-.PHONY: seed-patterns seed-patterns-upload seed-patterns-live
+.PHONY: seed-patterns seed-patterns-upload seed-patterns-live seed-recurring-live
 seed-patterns:
 	uv run python -m super_stonks.seed.patterns
 
@@ -116,6 +117,10 @@ seed-patterns-upload:
 seed-patterns-live:
 	$(PROJECT_GUARD)
 	uv run python -m super_stonks.seed.seed --scenario-set patterns --count $(COUNT) --gateway --workers 8
+
+seed-recurring-live:
+	$(PROJECT_GUARD)
+	uv run python -m super_stonks.seed.seed --scenario-set recurring --count $(COUNT) --gateway --workers 16 --report .bt/recurring-live.jsonl
 
 # Provision = the topics + smoke verify gate (alias for seed-smoke).
 .PHONY: provision

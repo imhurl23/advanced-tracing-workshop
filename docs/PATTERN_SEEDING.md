@@ -92,6 +92,51 @@ trace errors and are counted separately in the final summary.
 Use the synthetic run ID or `metadata.synthetic` to distinguish scripted evidence
 from observed behavior when analyzing the mixed project.
 
+## Focused recurring failures with real sessions
+
+The broad `patterns` probes intentionally include requests the agent often handles
+correctly. For a stronger concentration of recurring behaviors, use:
+
+```bash
+make seed-recurring-live COUNT=1200
+```
+
+This balances three scenario families, with varied tickers and wording and some
+two-turn sessions:
+
+| Family | What to inspect in the actual responses |
+| --- | --- |
+| `live_quote_gap` | Live-price requests get deflections, technical research, or repeated irrelevant analysis calls. The requested price tool remains unavailable. |
+| `unsupported_human_handoff` | The assistant claims it is transferring or raising a conversation to a human, although no handoff integration exists. Follow-ups ask whether the handoff actually happened. |
+| `range_position_confusion` | Requests for distance below the 52-week high may cause the model to misuse the tool's normalized range position as price/high or infer a percentage decline from it. |
+
+The last family tests a specific numerical distinction: `52w_position` is
+`(price - low) / (high - low)`. It does **not** give `price / high`, so `1 - position`
+is not the percentage decline from the high. The tool output does not include the
+price/low/high needed for that calculation. Correct refusals and correct explanations
+are retained alongside failures; scenario family labels identify test intent only.
+The model, prompt, tools, and tool outputs are unchanged by this mode.
+
+Each invocation prints a new `seed_run_id`, attached to root and turn spans. The
+local JSONL report records actual inputs, replies, tool names/results, root span IDs,
+and session completion. It appends across invocations; filter by run ID when auditing.
+Keep reports local under ignored `.bt/` because they contain conversation data.
+
+To run a small pilot or concentrate on selected families:
+
+```bash
+uv run python -m super_stonks.seed.seed --gateway --scenario-set recurring \
+  --count 36 --workers 12 --report .bt/recurring-pilot.jsonl
+
+uv run python -m super_stonks.seed.seed --gateway --scenario-set recurring \
+  --families live_quote_gap,unsupported_human_handoff \
+  --count 1000 --workers 16 --seed 42 --report .bt/recurring-focused.jsonl
+```
+
+The local report and traces contain unmodified model output. Failures are not
+guaranteed, fabricated, or inferred solely from a bucket name. Inspect the pilot
+before scaling, then verify stored sessions by run ID after the batch completes.
+
 ## Verification
 
 ```bash
