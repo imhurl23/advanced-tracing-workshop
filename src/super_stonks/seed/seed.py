@@ -4,7 +4,7 @@ The span tree and the logged input/output/metadata mirror the Streamlit app
 (`super_stonks/app.py`) exactly, so seeded "sims" are indistinguishable in shape from
 real traffic:
 
-    stonks-sessions (root, metadata: entrypoint/conversation_id/project/bucket)
+    stonks-sessions (root, metadata: entrypoint/conversation_id/project)
     └─ turn_{n}      (input = user_input string; metadata: turn/tool_names/message_count)
        └─ { LLM span, TOOL span }
     (the root/conversation span is logged each turn with input = the list of user messages)
@@ -31,7 +31,9 @@ from super_stonks.agent.agent import graph
 from super_stonks.agent.config import get_braintrust_project_name, init_braintrust_logger
 from super_stonks.seed.scenarios import build
 
-ENTRYPOINT = "seed"
+# Seeded sessions are logged exactly like real Streamlit traffic (same entrypoint, no
+# scenario labels), so analysis over the project treats them as production usage.
+ENTRYPOINT = "streamlit"
 
 
 def _extract_assistant_reply(messages: list[dict[str, Any]]) -> str:
@@ -60,7 +62,6 @@ def _seed_session(scenario: dict, project: str) -> None:
             "entrypoint": ENTRYPOINT,
             "conversation_id": conversation_id,
             "project": project,
-            "bucket": scenario["bucket"],
         },
     ) as session:
         agent_messages: list[dict] = []

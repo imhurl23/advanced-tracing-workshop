@@ -1,9 +1,9 @@
 # =============================================================================
 # advanced-tracing-workshop — operator entry points
 #
-# Prereqs (install from WELCOME.md before running any target): uv, bt, gh.
-# Auth/config: fill .env with the two API keys, then export BRAINTRUST_PROFILE +
-# BRAINTRUST_DEFAULT_PROJECT (see WORKSHOP.md §4.2).
+# Prereqs (install from WELCOME.md before running any target): uv, bt.
+# Auth/config: fill .env (Braintrust API key + your project), then load it into your
+# shell: set -a; source .env; set +a  (see WORKSHOP.md §4.2).
 # See SEEDING_MILESTONES.md for the full build plan.
 # =============================================================================
 
@@ -19,9 +19,9 @@ WARN := \033[33m
 ERR  := \033[31m
 END  := \033[0m
 
-# Every target that talks to Braintrust needs a project. It comes from the shell
-# export (WORKSHOP.md §4.2), which both bt and the Python code read.
-PROJECT_GUARD = @test -n "$${BRAINTRUST_DEFAULT_PROJECT:-}" || { printf "$(ERR)Set BRAINTRUST_DEFAULT_PROJECT first (WORKSHOP.md §4.2):$(END) export BRAINTRUST_DEFAULT_PROJECT=<your-project>\n"; exit 1; }
+# Every target that talks to Braintrust needs a project. It comes from .env, loaded
+# into the shell (WORKSHOP.md §4.2), which both bt and the Python code read.
+PROJECT_GUARD = @test -n "$${BRAINTRUST_DEFAULT_PROJECT:-}" || { printf "$(ERR)BRAINTRUST_DEFAULT_PROJECT is not set.$(END) Fill it in .env, then run: set -a; source .env; set +a\n"; exit 1; }
 
 # Full-seed size (override: `make seed COUNT=500`).
 COUNT ?= 500
@@ -41,7 +41,7 @@ help:
 	@echo "  make prepare       ONE-SHOT: enable Topics → smoke seed → full seed (prepare a project)"
 	@echo ""
 	@printf "$(BOLD)Setup$(END)\n"
-	@echo "  make setup         uv sync + create .env (checks uv/bt/gh are installed)"
+	@echo "  make setup         uv sync + create .env (checks uv/bt are installed)"
 	@echo "  make agent         run the agent's Streamlit app (live demo — §5.1)"
 	@echo ""
 	@printf "$(BOLD)Provision (pre-work, tool commented out)$(END)\n"
@@ -65,10 +65,9 @@ help:
 setup:
 	@command -v uv >/dev/null 2>&1 || { printf "$(ERR)uv not found.$(END) Install: curl -LsSf https://astral.sh/uv/install.sh | sh\n"; exit 1; }
 	@command -v bt >/dev/null 2>&1 || printf "$(WARN)bt not found — install: curl -fsSL https://bt.dev/cli/install.sh | bash$(END)\n"
-	@command -v gh >/dev/null 2>&1 || printf "$(WARN)gh not found — install: brew install gh (mac) / winget install GitHub.cli (win)$(END)\n"
 	uv sync
-	@if [ ! -f .env ]; then cp .env.example .env && printf "$(OK)Created .env — fill in OPENAI_API_KEY and BRAINTRUST_API_KEY.$(END)\n"; else printf "$(DIM).env already exists — leaving it.$(END)\n"; fi
-	@printf "$(OK)Setup complete.$(END) Next: fill .env, then export BRAINTRUST_PROFILE + BRAINTRUST_DEFAULT_PROJECT (WORKSHOP.md §4.2).\n"
+	@if [ ! -f .env ]; then cp .env.example .env && printf "$(OK)Created .env — fill in BRAINTRUST_API_KEY + BRAINTRUST_DEFAULT_PROJECT.$(END)\n"; else printf "$(DIM).env already exists — leaving it.$(END)\n"; fi
+	@printf "$(OK)Setup complete.$(END) Next: fill .env, then run: set -a; source .env; set +a\n"
 
 # -----------------------------------------------------------------------------
 # Live demo

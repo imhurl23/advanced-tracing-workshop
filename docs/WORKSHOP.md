@@ -33,38 +33,47 @@ curl -fsSL https://bt.dev/cli/install.sh | bash
 bt --version
 
 # Authenticate using API key provided in workshop
-bt auth login
+bt login
 
-# verify profile listed 
-bt auth profiles
-
-# --- session exports (the bt CLI reads these; no --env-file needed) ---
-# pins the workshop-advanced-tracing org (your profile maps to it)
-export BRAINTRUST_PROFILE="workshop-advanced-tracing"
-
-# YOUR project — every bt command, eval, and script resolves the project from this
-# (bt reads it natively, so `bt view logs`, `bt topics`, etc. need no --project)
-export BRAINTRUST_DEFAULT_PROJECT="<your-name>-advanced-tracing"
+# verify profile listed
+bt profiles
 ```
 
-The two **API keys** go in `.env` (copy from `.env.example`) — the Python agent,
-Streamlit app, and evals load them via `load_dotenv()`:
+**Everything lives in `.env`** (`make setup` copies it from `.env.example`). Participants
+fill in two values — the Braintrust API key and their name — then load it once per
+terminal:
 
 ```bash
 # .env
-OPENAI_API_KEY=<provided in workshop>
 BRAINTRUST_API_KEY=<provided in workshop>
+OPENAI_BASE_URL="https://gateway.braintrust.dev"
+OPENAI_API_KEY="${BRAINTRUST_API_KEY}"
+
+BRAINTRUST_PROFILE="dataoutpost-workshop"
+BRAINTRUST_ORG_NAME="dataoutpost-workshop"
+# YOUR project — every bt command, eval, and script resolves the project from this
+# (bt reads it natively, so `bt view logs`, `bt topics`, etc. need no --project)
+BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
 ```
+
+```bash
+set -a; source .env; set +a   # every new terminal, before starting a coding agent
+```
+
+The Braintrust API key is the only key participants get: OpenAI calls go through the
+Braintrust AI gateway (using the org's configured OpenAI key), so `OPENAI_API_KEY` just
+reuses the Braintrust key.
 
 Auth resolution order (first match wins): explicit `--profile` →
 `BRAINTRUST_API_KEY` → `BRAINTRUST_PROFILE` → org-matched profile →
 single-profile auto-select → interactive picker.
 
-> **Where each value lives:** the `bt` CLI runs off the two **exports** above
-> (profile + project) and authenticates via your profile — so it never needs `.env` or
-> `--env-file`. The **Python side** (agent / Streamlit / evals) reads the two **API
-> keys** from `.env` and inherits `BRAINTRUST_DEFAULT_PROJECT` from your shell session.
-> Everything runs in the **workshop-advanced-tracing** org.
+> **Where each value lives:** once `.env` is sourced, the `bt` CLI reads the profile,
+> org, and project from the shell (no `--env-file` needed). The **Python side** (agent /
+> Streamlit / evals) loads `.env` itself via `load_dotenv()`, and the agent's OpenAI
+> client always takes its key + gateway URL straight from `.env`. `BRAINTRUST_ORG_NAME`
+> keeps `bt` in the **dataoutpost-workshop** org even when it authenticates with the
+> exported API key instead of the saved profile.
 
 > **Your project vs. the shared seed.** Traces you generate locally — the app in §5.1,
 > your §17 traffic — land in **your own** `BRAINTRUST_DEFAULT_PROJECT`, and that's what
@@ -83,16 +92,13 @@ bt setup skills
 
 ---
 
-### 4.4 Configure Auto Improvment skill
+### 4.4 Auto Improvement skill (via the Braintrust MCP)
 
-This skill enables a coding agent to abide by Braintrust's AI SDLC Flywheel for building quality AI agents
-
-https://github.com/braintrustdata/braintrust-skills 
-
-```bash
-# Pick your agent: claude-code | codex | cursor | gemini | antigravity
-gh skill install braintrustdata/braintrust-skills agent-auto-improvement --agent claude-code
-```
+The `agent-auto-improvement` skill enables a coding agent to abide by Braintrust's AI SDLC
+Flywheel for building quality AI agents. Nothing to install: it's served by the
+**Braintrust MCP server** (set up in [`MCP.md`](MCP.md)), and the agent loads it on demand
+through the server's `load_braintrust_skill` tool. Ask for it by name — e.g. *"load the
+agent-auto-improvement skill from the Braintrust MCP"* — so the agent fetches it.
 
 ## 5. The Demo Agent
 
@@ -180,8 +186,8 @@ the agent responded and which tools it called, and call out any consistent failu
 The agent samples the cluster's traces and reports back the failure mode — e.g. *"these
 are realtime-price requests the agent can't satisfy; with no price tool it deflects into
 buy/sell analysis and never returns the actual price."* That's the gap (§9.1),
-**discovered from the traces rather than told.** From here the **`/agent-auto-improvement`**
-skill (§4.4) drives the rest of the loop: capture the bad traces, write a scorer, run
+**discovered from the traces rather than told.** From here the **`agent-auto-improvement`**
+skill (§4.4, via the Braintrust MCP) drives the rest of the loop: capture the bad traces, write a scorer, run
 evals, and fix the agent — which is exactly §9–§16 below.
 
 ---

@@ -21,7 +21,17 @@ _BUCKETS = [
         "What's the latest price on {t}?",
         "Quote for {t}?",
     ]),
-    ("research", 0.22, [
+    ("share_class", 0.12, [   # class-share / renamed tickers, as users actually type them
+        "Should I buy BRK.B right now?",
+        "Is Berkshire Hathaway (BRK.B) a good buy at the moment?",
+        "Give me a buy/hold/sell call on BF.B.",
+        "What do the technicals say about Brown-Forman BF.B?",
+        "Should I buy, hold, or sell HEI.A?",
+        "Give me a buy/hold/sell call on Block (SQ).",
+        "Is SQ a buy right now?",
+        "What do the technicals say about LEN.B?",
+    ]),
+    ("research", 0.16, [
         "Should I buy, hold, or sell {t} right now?",
         "Is {t} a good buy at the moment?",
         "Give me a buy/hold/sell call on {t} with the signals.",
@@ -36,7 +46,7 @@ _BUCKETS = [
         "Compare {t} and {t2}.",
         "Which is the better buy, {t} or {t2}?",
     ]),
-    ("concept", 0.20, [
+    ("concept", 0.14, [
         "Explain what a P/E ratio means.",
         "What's the difference between an ETF and a mutual fund?",
         "How do dividends work?",

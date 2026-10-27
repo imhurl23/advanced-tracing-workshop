@@ -3,66 +3,62 @@
 Follow top to bottom. You **read** the shared, pre-seeded `super-stonks` project; you
 **write** (dataset, experiments, online score) to **your own** project.
 
+> **Using Codex as your coding agent?** You don't need an OpenAI account — Codex can run
+> on the Braintrust API key in your `.env` via the Braintrust AI gateway. After step 2
+> (once `.env` is filled in), follow [`CODEX.md`](CODEX.md) to set it up.
+
 ## 1. Install
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh          # uv
 curl -fsSL https://bt.dev/cli/install.sh | bash          # bt
-bt --version                                             # verify installation and version >= 0.15.1
-brew install gh                                          # gh (or: winget install GitHub.cli)
+bt --version                                             # verify installation and version >= 0.27.2
 ```
 
 ## 2. Configure
 
 ```bash
-git clone git@github.com:spencerseale/advanced-tracing-workshop.git && cd advanced-tracing-workshop
+git clone git@github.com:imhurl23/advanced-tracing-workshop.git && cd advanced-tracing-workshop
 make setup  # uv sync + creates .env
 ```
 
-Fill in the .env file with the two keys from the workshop:
+Open `.env` and fill in the two `<...>` values: the Braintrust API key from the workshop,
+and your name (so you get your own project). That's the only key you need — OpenAI calls
+go through the Braintrust AI gateway, so `OPENAI_API_KEY` already reuses it. Leave
+everything else as-is:
 
 ```bash
-# .env — paste the two keys from the workshop:
-#   OPENAI_API_KEY=...
-#   BRAINTRUST_API_KEY=...
+# .env
+BRAINTRUST_API_KEY="<paste your Braintrust API key>"
+OPENAI_BASE_URL="https://gateway.braintrust.dev"
+OPENAI_API_KEY="${BRAINTRUST_API_KEY}"
+
+BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
+# BRAINTRUST_PROFILE="dataoutpost-workshop"
+BRAINTRUST_ORG_NAME="dataoutpost-workshop"
 ```
 
-Run the following command, then use the arrow keys to select `API Key` as the auth method. Paste your Braintrust API key to create the new login.
+Load it into your shell so `bt`, `make`, and your coding agent all pick it up:
 ```bash
-bt auth login
+set -a; source .env; set +a
 ```
 
-Quickly verify a new profile was successfully created.
-```bash
-bt auth profiles
-```
-You should see an output like `✓ workshop-advanced-tracing — api_key — org: workshop-advanced-tracing — sk-****gYyeM`.
+> **Note:** this lasts for the current terminal only. Re-run it in every new terminal,
+> and **before** starting your coding agent (Claude Code, Codex, Cursor) — they only see
+> what was exported in the shell they were launched from.
 
-Next, set the following so future commands have the right context to execute. Replace `<your-name>` with your name so you get your own project.
-```bash
-export BRAINTRUST_PROFILE="workshop-advanced-tracing"
-export BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
-```
-
-Next, set up the Braintrust skills so coding agents know exactly how to interact with `bt`. Select `local` as the scope, press "Enter" to accept the default workflow docs, and choose the coding agent of your choice. We will be using Claude in this workshop, but all should work the same way.
-```bash
-bt setup skills 
-```
-
-Fetch the `agent-auto-improvement` skill from the Braintrust skills repository. Select `Project` as the installation scope.
-```bash
-gh skill install braintrustdata/braintrust-skills agent-auto-improvement --agent claude-code
-```
+With `.env` loaded, connect your coding agent to the Braintrust MCP server — follow
+[`MCP.md`](MCP.md) for Claude Code, Codex, or Cursor.
 
 ## 3. Run the agent, see your trace
 
 This repository contains a simple agent you'll use throughout to generate traces and interact with. Use the `make` command to launch it. It will open in your browser.
 
-> **Note:** make sure you have `BRAINTRUST_API_KEY` and `OPENAI_API_KEY` set in `.env`, otherwise you will run into issues.
+> **Note:** make sure `.env` is filled in and loaded (`set -a; source .env; set +a`) in this terminal, otherwise you will run into issues.
 ```bash
 make agent
 ```
-Once the Streamlit app opens and loads, ask a question in the chat input or select a "Starting point" from the left. When you've done some interacting, interrupt the app with Ctrl + C.
+Once the Streamlit app opens and loads, ask a question in the chat input or select a "Starting point" from the left. When you've done some interacting, interrupt the app with `Ctrl + c`.
 
 With some interactions logged, use the following to view your traces in the console.
 ```bash
@@ -92,7 +88,7 @@ It should find the gap: price questions the agent can't answer — no realtime-p
 
 Now, add 10 traces to a dataset in your own project for offline evaluation. Prompt your coding agent to do this.
 ```text
-/agent-auto-improvement Capture 10 traces from the "Current stock price analysis" cluster as a dataset 'current-price-gap-offline' — the failure taxonomy/metadata is the price gap. Use /braintrust skill to capture traces and create a dataset.
+Load the agent-auto-improvement skill from the Braintrust MCP server, then capture 10 traces from the "Current stock price analysis" cluster as a dataset 'current-price-gap-offline' — the failure taxonomy/metadata is the price gap. Use the bt CLI to capture the traces and create the dataset.
 ```
 As before, accept the dialogs while observing what Claude is doing.
 

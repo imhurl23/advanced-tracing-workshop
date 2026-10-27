@@ -14,12 +14,23 @@ Stonks**, a small LangGraph stock-chat agent instrumented with the Braintrust SD
   (presenter run-of-show), `docs/SEEDING_MILESTONES.md` (build plan / trace shape / scorer +
   seeding design), `docs/WELCOME.md` (attendee install screen).
 
-## ⚠️ The tool gap — read `docs/GAP.md`
+## ⚠️ The workshop objective — dotted share-class tickers
 
-The realtime-price tool (`get_stock_performance`, Yahoo/yfinance) is **intentionally
-commented out** — that's the workshop's built-in failure. **If the user asks you to add
-the missing tool, fetch live prices, "fill the gap", or ground the answers, follow
-[`docs/GAP.md`](docs/GAP.md) exactly** (it's two uncomments — do not reimplement the tool).
+The realtime-price tool (`get_stock_performance`) is now **enabled**; the old price gap
+(`docs/GAP.md`) is closed and is no longer the target.
+
+The failure the workshop surfaces (via Braintrust **Patterns** on the shared
+`super-stonks` project) is **ticker format**: users type class shares in dot notation
+(`BRK.B`, `BF.B`, `HEI.A`, `LEN.B`), but Yahoo/yfinance only knows the dash form
+(`BRK-B`). Both `analyze_stock_buy` and `get_stock_performance` then return
+`{"error": "No data found …"}` as a **normal tool result** — no span error, so it's a
+silent failure. A related case is renamed tickers (`SQ` → `XYZ`). The seed's
+`share_class` bucket (`seed/scenarios.py`) plants this traffic.
+
+**If the user asks you to fix it:** normalize the ticker **once, before the tool call**,
+in `agent.py::_invoke_tool` (e.g. replace `.` with `-`, plus a small alias map such as
+`{"SQ": "XYZ"}`), so both tools benefit. Don't edit the tool functions themselves or
+change `analyze_stock_buy`.
 
 ## Layout (src-layout, package = `super_stonks`)
 
@@ -84,7 +95,8 @@ Topics cluster by name), use the `bt` CLI **against the shared `super-stonks` pr
    `.data[]`, not a bare array), and the turn-level user text + agent reply live on the
    `turn_{n}` spans (`.input` = user string, `.output` = agent reply); the root
    `stonks-sessions` span carries the same input/output too. `analyze_stock_buy` is the only
-   TOOL span you'll see — its absence of a price tool is the failure. Example:
+   TOOL span in traces seeded before the price tool was enabled; newer traces also have
+   `get_stock_performance`. Example:
    ```
    bt sql "SELECT span_attributes.name AS name, input, output
            FROM project_logs('<super-stonks project id>')
@@ -94,7 +106,8 @@ Topics cluster by name), use the `bt` CLI **against the shared `super-stonks` pr
    The SQL linter requires a range/id filter, so **always scope by `root_span_id`** (or add
    a `created >= '<date>'` range). Get the id from `bt projects list --json`.
 6. **Report the failure mode from the evidence** — e.g. inputs ask for X but the agent has
-   no tool for X, so it deflects. (For this repo that's the price gap — see `docs/GAP.md`.)
+   no tool for X, so it deflects; or a tool "succeeds" with an `error` payload. (For this
+   repo that's the dotted share-class tickers — see the objective above.)
 
 The curated dataset from this cluster is then created in the **user's own**
 `BRAINTRUST_DEFAULT_PROJECT` (write), not in `super-stonks`.
@@ -145,23 +158,30 @@ Use `bt datasets update/add <name> --file …` to upsert more rows, and
 - **Trace shape / span names:** root `stonks-sessions` → `turn_{n}` (0-based) →
   `{ LLM span, TOOL span }`. Both the CLI (`agent/__main__.py`) and Streamlit (`app.py`)
   emit this; any seed script must too.
-- **Config:** `.env` holds only secrets (`OPENAI_API_KEY`, `BRAINTRUST_API_KEY`).
-  `BRAINTRUST_PROFILE` + `BRAINTRUST_DEFAULT_PROJECT` are shell exports (see
-  `docs/WORKSHOP.md §4.2`); the `bt` CLI and the Python code both read the project from
-  `BRAINTRUST_DEFAULT_PROJECT`. Org is always `workshop-advanced-tracing`.
-- **`bt` CLI auth:** the CLI is authenticated with an API token via `bt auth login`
-  (stored in the profile / keychain), so it does **not** read `BRAINTRUST_API_KEY` from
-  `.env`. That `.env` value exists only for the **Python Braintrust SDK** (agent,
-  Streamlit, evals). Don't add `--env-file` to `bt` commands.
+- **Config:** everything lives in **`.env`** (template: `.env.example`) — participants get
+  **one** key, `BRAINTRUST_API_KEY`, and fill in their name for `BRAINTRUST_DEFAULT_PROJECT`.
+  OpenAI traffic goes through the Braintrust AI gateway (`OPENAI_BASE_URL=https://gateway.braintrust.dev`,
+  `OPENAI_API_KEY="${BRAINTRUST_API_KEY}"`), which uses the org's configured OpenAI key. No
+  separate OpenAI key is distributed. `.env` also holds `BRAINTRUST_PROFILE`,
+  `BRAINTRUST_ORG_NAME`, and `BRAINTRUST_DEFAULT_PROJECT`; users load it once per terminal
+  with `set -a; source .env; set +a` (see `docs/WORKSHOP.md §4.2`). The `bt` CLI and the
+  Python code both read the project from `BRAINTRUST_DEFAULT_PROJECT`. The agent's OpenAI
+  client (`agent/agent.py`) always reads its key + base URL directly from `.env`.
+- **`bt` CLI auth:** `bt` authenticates with whatever is in the shell once `.env` is
+  sourced — the `BRAINTRUST_PROFILE` saved by `bt login`, or the exported
+  `BRAINTRUST_API_KEY` (same workshop key either way). `BRAINTRUST_ORG_NAME` pins the org so
+  it never falls back to a different org from the user's global bt config. `bt` doesn't
+  read `.env` itself — source it; don't add `--env-file` to `bt` commands.
 - **Package management:** uv. Add deps to `pyproject.toml`; run via `uv run`.
-- **Env in bash (coding agents):** a human exports the vars once per session
-  (`docs/WORKSHOP.md §4.2`), but a coding agent's shell usually **resets between commands** —
-  exports don't persist. So pass what each command needs **inline**:
-  - `bt` / `make` targets need the project: `BRAINTRUST_DEFAULT_PROJECT=super-stonks make seed-smoke`
-    (and `BRAINTRUST_PROFILE=workshop-advanced-tracing` if the profile isn't already the active one).
-  - Ad-hoc Python that imports the agent/scorers (they build OpenAI clients at import)
-    needs the keys: `OPENAI_API_KEY=… BRAINTRUST_API_KEY=… uv run python …`. The CLI/Streamlit/eval
-    entrypoints already call `load_dotenv()`, so `make agent` etc. pick them up from `.env` on their own.
+- **Env in bash (coding agents):** a human sources `.env` once per terminal
+  (`set -a; source .env; set +a`), and a coding agent launched from that shell inherits it.
+  But a coding agent's own shell usually **resets between commands** — anything *it*
+  exports doesn't persist. So if a command needs the env and it isn't inherited, load it
+  **inline**: `set -a; source .env; set +a; <command>`. To target a different project for one
+  command, override inline after sourcing, e.g.
+  `set -a; source .env; set +a; BRAINTRUST_DEFAULT_PROJECT=super-stonks make seed-smoke`.
+  The CLI/Streamlit/eval entrypoints already call `load_dotenv()`, so `make agent` etc. pick
+  up `.env` on their own.
 
 ## Don't
 

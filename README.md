@@ -34,6 +34,9 @@ agent, investigate Topics, build the dataset, score, close the gap, and validate
 Before the session, the install steps also live on the welcome screen —
 [`docs/WELCOME.md`](docs/WELCOME.md).
 
+**Using Codex?** You can run it on the Braintrust API key in your `.env` (via the
+Braintrust AI gateway) — no OpenAI account needed. See [`docs/CODEX.md`](docs/CODEX.md).
+
 ## For presenters
 
 Use these resources to set the workshop up again and run it:
@@ -51,8 +54,10 @@ Use these resources to set the workshop up again and run it:
 1. Provision the shared `super-stonks` project (traces + Topics) per
    [`docs/SEEDING_MILESTONES.md`](docs/SEEDING_MILESTONES.md), leaving the
    intentional failure in place (see [`docs/GAP.md`](docs/GAP.md)).
-2. Distribute the `OPENAI_API_KEY` and `BRAINTRUST_API_KEY` for the
-   `workshop-advanced-tracing` org.
+2. Distribute a `BRAINTRUST_API_KEY` for the `workshop-advanced-tracing` org. No
+   OpenAI key is handed out — OpenAI calls go through the Braintrust AI gateway using
+   the OpenAI key configured in the org (make sure one is set under the org's AI
+   providers).
 3. Walk participants through [`docs/PARTICIPANT.md`](docs/PARTICIPANT.md), using
    [`docs/WORKSHOP.md`](docs/WORKSHOP.md) as your run-of-show.
 

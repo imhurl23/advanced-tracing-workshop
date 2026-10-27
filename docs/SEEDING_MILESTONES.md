@@ -60,8 +60,8 @@ no prompt registry, no `load_prompt`, nothing pushed. `exa` is **not used anywhe
 verified across all files and git refs.
 
 **Config & secrets split:**
-- **`.env`** (loaded by Python via `load_dotenv()`): `OPENAI_API_KEY`, `BRAINTRUST_API_KEY` — the two secrets the agent / Streamlit / evals need.
-- **Session exports** (`WORKSHOP.md §4.2`): `BRAINTRUST_PROFILE` (bt auth + org) and `BRAINTRUST_DEFAULT_PROJECT` (project, read by bt **and** Python). The `bt` CLI needs no `.env` / `--env-file` — it auths via the profile.
+- **`.env`** (loaded by Python via `load_dotenv()`): `BRAINTRUST_API_KEY` — the one secret participants get; `OPENAI_API_KEY` reuses it (`"${BRAINTRUST_API_KEY}"`) and `OPENAI_BASE_URL` points at the Braintrust AI gateway, which uses the org's configured OpenAI key.
+- **Context** (also in `.env`, sourced into the shell per `WORKSHOP.md §4.2`): `BRAINTRUST_PROFILE` + `BRAINTRUST_ORG_NAME` (bt auth + org) and `BRAINTRUST_DEFAULT_PROJECT` (project, read by bt **and** Python). `bt` doesn't read `.env` itself — source it; no `--env-file`.
 
 | Path | What it is |
 |---|---|
@@ -170,7 +170,7 @@ already exists — this milestone adds the packaging + operator entry points aro
 | Status | Task | Notes |
 |---|---|---|
 | [x] | `pyproject.toml` + `uv.lock` | **done** — package **`super-stonks`** (hatchling, src-layout, `packages = ["src/super_stonks"]`); deps: `braintrust`, `autoevals`, `openai`, `langgraph`, `yfinance`, `click`, `streamlit`, `python-dotenv`, `pydantic`; `requires-python >=3.10`. `uv sync` installs it editable → `import super_stonks…` works everywhere (verified) |
-| [ ] | `make setup` → `uv sync` + copy `.env.example`→`.env` if missing | `.env` holds only secrets: `OPENAI_API_KEY`, `BRAINTRUST_API_KEY`. `BRAINTRUST_PROFILE` + `BRAINTRUST_DEFAULT_PROJECT` are session exports (§4.2) |
+| [ ] | `make setup` → `uv sync` + copy `.env.example`→`.env` if missing | `.env` holds everything: `BRAINTRUST_API_KEY` (reused as `OPENAI_API_KEY` via the gateway) + `BRAINTRUST_PROFILE` / `BRAINTRUST_ORG_NAME` / `BRAINTRUST_DEFAULT_PROJECT`; sourced once per terminal (§4.2) |
 | [x] | `Makefile` with the target list (below) | **done** — `setup`, `agent`, `topics`, `push-scorer` (pushes `push_assets.py`) work now; `seed*` + `automations` guarded with a pointer to their milestone until `seed.py`/`configure.py` exist |
 | [x] | `.gitignore` already present | keeps `.env` out (verified) |
 
@@ -382,7 +382,7 @@ from braintrust import Eval, init_dataset
 from super_stonks.agent.agent import graph
 from super_stonks.evals.scorers import response_grounded_in_data   # the workshop scorer
 
-PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]     # each attendee's own project (session export)
+PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]     # each attendee's own project (from .env)
 
 def run(user_input: str) -> str:
     result = graph.invoke({"messages": [{"role": "user", "content": user_input}]})
