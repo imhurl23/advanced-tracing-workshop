@@ -17,15 +17,14 @@ bt --version                                             # verify installation a
 
 ## 2. Configure
 
+Clone the workshop repository and set up the environment:
+
 ```bash
 git clone git@github.com:imhurl23/advanced-tracing-workshop.git && cd advanced-tracing-workshop
 make setup  # uv sync + creates .env
 ```
 
-Open `.env` and fill in the two `<...>` values: the Braintrust API key from the workshop,
-and your name (so you get your own project). That's the only key you need — OpenAI calls
-go through the Braintrust AI gateway, so `OPENAI_API_KEY` already reuses it. Leave
-everything else as-is:
+Open `.env` and fill in the values for `$BRAINTRUST_API_KEY` and `$BRAINTRUST_DEFAULT_PROJECT`:
 
 ```bash
 # .env
@@ -49,6 +48,13 @@ set -a; source .env; set +a
 
 With `.env` loaded, connect your coding agent to the Braintrust MCP server — follow
 [`MCP.md`](MCP.md) for Claude Code, Codex, or Cursor.
+
+
+<!-- Next, set up the Braintrust skills so coding agents know exactly how to interact with `bt`. Select `local` as the scope, press "Enter" to accept the default workflow docs, and choose the coding agent of your choice. We will be using Claude in this workshop, but all should work the same way.
+```bash
+bt setup skills 
+``` -->
+
 
 ## 3. Run the agent, see your trace
 

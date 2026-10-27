@@ -1,10 +1,12 @@
 """Offline experiment for the workshop — run with `bt eval`.
 
-Runs the agent over the curated gap dataset (in YOUR project) and scores each answer
-with the grounding judge. Run it twice to get the before/after:
+Runs the agent over the dataset curated from the share-class ticker pattern (in YOUR
+project) and scores each answer with the grounding judge. Run it twice to get the
+before/after:
 
-  1. tool still commented out  -> baseline experiment (low grounding)
-  2. uncomment get_stock_performance (GAP.md) -> re-run -> grounding jumps
+  1. tickers passed through as typed (BRK.B) -> baseline experiment (tools return
+     "No data found", low grounding)
+  2. normalize tickers in agent.py::_invoke_tool (BRK.B -> BRK-B) -> re-run -> grounding jumps
 
     bt eval src/super_stonks/evals/qa_eval.py
 
@@ -30,7 +32,7 @@ DATASET = os.environ.get("EVAL_DATASET", "realtime-price")
 def run(user_input) -> str:
     # Dataset inputs may be a bare string, {"content": "..."} / {"q": "..."}, or a
     # trace-derived message list [{"role": "user", "content": "..."}] (what the curated
-    # gap dataset stores) — take the last user turn's text.
+    # pattern dataset stores) — take the last user turn's text.
     if isinstance(user_input, list):
         user_msgs = [m for m in user_input if isinstance(m, dict) and m.get("role") == "user"]
         chosen = (user_msgs or [m for m in user_input if isinstance(m, dict)] or [{}])[-1]

@@ -17,7 +17,7 @@ Stonks**, a small LangGraph stock-chat agent instrumented with the Braintrust SD
 ## ⚠️ The workshop objective — dotted share-class tickers
 
 The realtime-price tool (`get_stock_performance`) is now **enabled**; the old price gap
-(`docs/GAP.md`) is closed and is no longer the target.
+is closed and is no longer the target.
 
 The failure the workshop surfaces (via Braintrust **Patterns** on the shared
 `super-stonks` project) is **ticker format**: users type class shares in dot notation

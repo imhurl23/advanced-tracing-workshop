@@ -1,8 +1,8 @@
 """Seed scenarios — a weighted mix of user questions for the Super Stonks agent.
 
-~20% are realtime-price asks: THE GAP. With `get_stock_performance` commented out the
-agent can't answer them, so they cluster in Topics and (once the grounding scorer is
-built) score low. The rest give the project realistic variety.
+~12% are share-class / renamed tickers typed the way users do (BRK.B, SQ). Yahoo only
+knows the dash form (BRK-B), so the tools return "No data found" as a normal result —
+the silent failure Patterns surfaces. The rest give the project realistic variety.
 
 `build(count)` returns a list of `{"bucket": str, "turns": [user_msg, ...]}` — one entry
 per session/trace. Deterministic given `seed` so runs are reproducible.
@@ -14,7 +14,7 @@ TICKERS = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "NFLX
 
 # (bucket, weight, templates). {t}/{t2} are filled with tickers.
 _BUCKETS = [
-    ("realtime_price", 0.20, [   # THE GAP — no tool to answer these
+    ("realtime_price", 0.20, [
         "What is {t} trading at right now?",
         "Give me the current share price of {t}.",
         "How much is {t} stock today?",
@@ -86,7 +86,7 @@ def _fill(template: str, rng: random.Random) -> str:
 
 def build(count: int, seed: int = 0) -> list[dict]:
     """Proportional (stratified) allocation, so even a 10-trace smoke gets its share of
-    every bucket — including the realtime-price gap — instead of an unlucky random draw
+    every bucket — including the share-class tickers — instead of an unlucky random draw
     dropping it entirely."""
     rng = random.Random(seed)
 

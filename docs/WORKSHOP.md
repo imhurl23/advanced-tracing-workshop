@@ -1,7 +1,7 @@
 # Advanced Tracing Workshop
 
 An end-to-end walkthrough of the Braintrust workflow using the `bt` CLI: observe
-production traces, mine them for patterns, build evals, iterate on an agent, and
+production traces, let Patterns surface recurring failures, build evals, iterate on an agent, and
 close the loop with online scoring.
 
 > Numbering below continues from the broader session agenda (intro/setup sections
@@ -49,10 +49,10 @@ BRAINTRUST_API_KEY=<provided in workshop>
 OPENAI_BASE_URL="https://gateway.braintrust.dev"
 OPENAI_API_KEY="${BRAINTRUST_API_KEY}"
 
-BRAINTRUST_PROFILE="dataoutpost-workshop"
+# BRAINTRUST_PROFILE="dataoutpost-workshop"
 BRAINTRUST_ORG_NAME="dataoutpost-workshop"
 # YOUR project — every bt command, eval, and script resolves the project from this
-# (bt reads it natively, so `bt view logs`, `bt topics`, etc. need no --project)
+# (bt reads it natively, so `bt view logs`, `bt datasets`, etc. need no --project)
 BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
 ```
 
@@ -77,9 +77,9 @@ single-profile auto-select → interactive picker.
 
 > **Your project vs. the shared seed.** Traces you generate locally — the app in §5.1,
 > your §17 traffic — land in **your own** `BRAINTRUST_DEFAULT_PROJECT`, and that's what
-> §6 views. But your project only holds your handful of traces, so for **Topics
-> clustering** (§8) you read the shared, pre-seeded **`super-stonks`** project
-> (`--project super-stonks`, thousands of traces). You still **write** your curated
+> §6 views. But your project only holds your handful of traces, so for **Patterns**
+> (§8) you read the shared, pre-seeded **`super-stonks`** project
+> (`--project super-stonks`). You still **write** your curated
 > dataset, experiments, and online score back to your own project.
 
 ### 4.3 Agent skills setup
@@ -107,7 +107,7 @@ it's traced.
 
 - **What it is:** a small LLM agent instrumented with the Braintrust SDK so every
   run produces a trace with nested spans (LLM calls, tool calls, retrieval, etc.).
-- **Why it matters:** it emits the exact trace shape we'll observe, cluster, and
+- **Why it matters:** it emits the exact trace shape we'll observe, analyze, and
   evaluate for the rest of the session.
 
 ### 5.1 Streamlit front-end (optional live demo)
@@ -139,75 +139,83 @@ span/thread view, `Ctrl+k` copy URL, `q` quit.
 
 ---
 
-## 7. Slide Break — Topics Intro
+## 7. Slide Break — Patterns Intro
 
-Pause for slides. Introduce **topic clustering**: how Braintrust groups semantically
-similar traces so you can spot patterns across thousands of runs instead of reading
-them one at a time.
+Pause for slides. Introduce **Patterns**: a scheduled Braintrust Loop automation that
+reads a project's recent traces, finds recurring behaviors (tool failures, wrong
+outputs, inefficiencies), and records each one as a Pattern with evidence, frequency,
+severity, and a suggested fix — so you don't have to read thousands of traces yourself.
+
+Key point to land: Patterns catches failures that **never raise an error**. A tool can
+"succeed" and return `{"error": ...}` as its result; span-level error filters miss that.
 
 ---
 
-## 8. Explore Clusters with `bt topics`
+## 8. Explore Patterns on the shared seed
 
 **Now switch to the shared seed.** Your own project only has the few traces you just
-generated — not enough to cluster. `super-stonks` is pre-seeded with thousands, so
-specify it explicitly:
+generated. `super-stonks` is pre-seeded and has a Patterns automation running on it
+(weekdays 9am PT), so the findings are already there.
 
-```bash
-# See the clusters visually in the browser (only the workshop instructors have an account):
-bt topics open --project super-stonks
+Show the Patterns page in the browser (only the workshop instructors have an account):
 
-# …or list them in the terminal. Clusters are grouped by facet; the "Task" facet
-# (what the user is trying to do) is the one we care about:
-TASK=$(bt topics config --json --project super-stonks \
-  | jq -r '.automations[0].topic_map_functions[] | select(.name=="Task").id')
-bt topics report "$TASK" --project super-stonks \
-  | jq -r '.clusters[] | "\(.count)\t\(.name)"'
+```text
+https://www.braintrust.dev/app/dataoutpost-workshop/p/super-stonks/patterns
 ```
 
-> Note: bare `bt topics` shows automation *status*, not cluster names — cluster names
-> come from `bt topics report <topic-map-id>` (JSON; parse `.clusters[]`).
+Walk the list. Expect a mix of planted and emergent findings, e.g.:
 
-Walk the clusters and target the problematic one — **"Current stock price analysis"**
-(the price-gap cluster) — for the rest of the workshop.
+- **Stock analysis rejects dotted share-class tickers** — the target for the rest of
+  the workshop.
+- **Block analysis fails for SQ ticker requests** — the same root cause (renamed
+  ticker), different fix.
+- Emergent findings nobody planted (e.g. misreading the 52-week range position, an
+  outdated RMD penalty). Good talking point: Patterns finds things you didn't seed.
 
-### 8.1 Investigate the cluster with your coding agent
+> Patterns only stays **active** while matching traces keep arriving (activity in the
+> last two weekdays). Top up the seed shortly before the session:
+> `set -a; source .env; set +a; BRAINTRUST_DEFAULT_PROJECT=super-stonks uv run python -m super_stonks.seed.seed --count 100`
 
-Hand the cluster off to your coding agent. It already has the
-**`/braintrust`** skill (§4.3) and reads the repo's `AGENTS.md`, so it can drill in with
-no extra setup. Ask it something broad — let it reach the conclusion from the traces:
+### 8.1 Investigate the pattern with your coding agent
 
-```bash
-How are traces performing in the "Current stock price analysis" topic cluster in
-`super-stonks`? Pull a representative sample, compare what the user asked against how
-the agent responded and which tools it called, and call out any consistent failure mode.
+Participants can't open the UI, but their coding agent can read the same Patterns
+through the **Braintrust MCP server** ([`MCP.md`](MCP.md)) and drill into the traces
+with `bt`. Ask something broad — let it reach the conclusion from the evidence:
+
+```text
+List the Patterns in the 'super-stonks' project. Pick the one about share-class
+tickers, pull a representative sample of its traces, and compare what the user asked,
+which ticker the agent passed to its tools, and what the tools returned. What's the
+root cause?
 ```
 
-The agent samples the cluster's traces and reports back the failure mode — e.g. *"these
-are realtime-price requests the agent can't satisfy; with no price tool it deflects into
-buy/sell analysis and never returns the actual price."* That's the gap (§9.1),
-**discovered from the traces rather than told.** From here the **`agent-auto-improvement`**
-skill (§4.4, via the Braintrust MCP) drives the rest of the loop: capture the bad traces, write a scorer, run
-evals, and fix the agent — which is exactly §9–§16 below.
+The agent should report the failure mode: *users type class shares in dot notation
+(`BRK.B`, `BF.B`, `HEI.A`, `LEN.B`); Yahoo/yfinance only knows the dash form (`BRK-B`),
+so `analyze_stock_buy` and `get_stock_performance` return "No data found" as a normal
+result, and the agent either guesses another symbol or tells the user the ticker is
+invalid.* From here the **`agent-auto-improvement`** skill (§4.4, via the Braintrust
+MCP) drives the rest of the loop — exactly §9–§16 below.
 
 ---
 
-## 9. Pull a Cluster into a Dataset
+## 9. Pull the pattern's traces into a dataset
 
-Curate the cluster's traces (read from **`super-stonks`**) into a dataset **in your own
+Curate the pattern's traces (read from **`super-stonks`**) into a dataset **in your own
 project** (`BRAINTRUST_DEFAULT_PROJECT`) — this is the first thing you *write*, and it's
-what your experiments run against.
+what your experiments run against. Create it with `bt datasets create --file rows.jsonl`
+(see `AGENTS.md`), carrying the source trace id and failure category in `metadata`.
 
 ```bash
-# Source traces: super-stonks cluster.  Destination dataset: your own project.
+# Source traces: super-stonks pattern.  Destination dataset: your own project.
 bt datasets --help
 ```
 
 ### 9.1 The gap
 
-Call it out explicitly: **there is no scorer capturing how the agent performs on
-this cluster.** We can see the traces, but nothing is measuring quality here yet.
-That's the motivation for everything after the break.
+Call it out explicitly: **there is no scorer catching these silent tool failures.**
+The spans have no error flag, so nothing is measuring how often the agent hands a user
+"ticker not found" for a perfectly valid company. That's the motivation for everything
+after the break.
 
 ---
 
@@ -217,23 +225,25 @@ That's the motivation for everything after the break.
 
 ## 11. Create a New Scorer
 
-Write a scorer that measures quality on the cluster we just curated — the metric
-that was missing in §9.1.
+Write a scorer that measures quality on the pattern we just curated — the metric that
+was missing in §9.1.
 
 ```bash
 # Scaffold / edit a scorer (LLM-as-judge or code-based)
 # add it to the eval file created in the next step
 ```
 
-- Decide: code-based check vs. LLM-as-judge.
-- Define what "good" means for this cluster of inputs.
+- Decide: code-based check vs. LLM-as-judge. A **code-based** check fits well here —
+  did any tool call in the trace return an `error` payload?
+- Optionally pair it with a judge: did the final answer actually address the company
+  the user asked about?
 
 ---
 
 ## 12. Run an Experiment — Establish a Baseline
 
 ```bash
-# Run the eval against your curated dataset (agent tool still OFF = the baseline)
+# Run the eval against your curated dataset (ticker fix not applied = the baseline)
 bt eval src/super_stonks/evals/qa_eval.py
 
 # Smoke test a few cases first
@@ -247,15 +257,16 @@ number. This is what we're trying to beat.
 
 ---
 
-## 13. Change the Agent — close the gap
+## 13. Change the Agent — fix the ticker format
 
-Fix the exact failure the cluster exposed: give the agent the realtime-price tool it
-was missing. Uncomment `get_stock_performance` (the two `THE GAP` blocks in
-`src/super_stonks/agent/tools.py` and `agent.py`) — see `GAP.md`. Or have your coding
-agent do it: *"fill the tool gap"* → it follows `GAP.md`.
+Fix the exact failure the pattern exposed: normalize the ticker **once, before any tool
+call**, in `src/super_stonks/agent/agent.py::_invoke_tool` — convert dot notation to the
+dash form Yahoo expects (`BRK.B` → `BRK-B`), plus a small alias map for renamed tickers
+(`SQ` → `XYZ`). Both tools benefit from the one change. Or have your coding agent do it:
+*"fix the share-class ticker pattern"* → it follows `AGENTS.md`.
 
-- Before: no price tool → the agent answered from parametric knowledge (ungrounded).
-- After: the agent calls `get_stock_performance` and grounds its answer in real data.
+- Before: dotted tickers → "No data found" → the agent guesses or gives up.
+- After: the tools get a symbol Yahoo recognizes and the agent answers with real data.
 
 ---
 
@@ -297,7 +308,7 @@ and the online score live in `BRAINTRUST_DEFAULT_PROJECT`, not the shared seed:
 bt view logs        # your own project (BRAINTRUST_DEFAULT_PROJECT)
 ```
 
-Close the loop: **observe → cluster → curate → score → experiment → improve →
+Close the loop: **observe → find patterns → curate → score → experiment → improve →
 compare → deploy online → re-observe.**
 
 ```bash

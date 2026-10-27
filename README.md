@@ -45,15 +45,14 @@ Use these resources to set the workshop up again and run it:
 | --- | --- |
 | [`docs/WORKSHOP.md`](docs/WORKSHOP.md) | Presenter run-of-show — the `bt` CLI tour and the end-to-end flow, section by section. |
 | [`docs/SEEDING_MILESTONES.md`](docs/SEEDING_MILESTONES.md) | Build plan for provisioning the shared, pre-seeded `super-stonks` project (Topics + ~1,000 traces) and the trace/scorer design. |
-| [`docs/GAP.md`](docs/GAP.md) | The details of the intentional failure and exactly how to close it. Keep this one to yourself — it's the answer key. |
 | [`docs/WELCOME.md`](docs/WELCOME.md) | Attendee install/welcome screen. |
 | [`AGENTS.md`](AGENTS.md) | Single source of truth for coding-agent guidance, conventions, and the shared-seed vs. own-project split. |
 
 ### Setup at a glance
 
 1. Provision the shared `super-stonks` project (traces + Topics) per
-   [`docs/SEEDING_MILESTONES.md`](docs/SEEDING_MILESTONES.md), leaving the
-   intentional failure in place (see [`docs/GAP.md`](docs/GAP.md)).
+   [`docs/SEEDING_MILESTONES.md`](docs/SEEDING_MILESTONES.md), including the
+   planted share-class ticker traffic, and turn on Patterns (see `docs/WORKSHOP.md` §8).
 2. Distribute a `BRAINTRUST_API_KEY` for the `workshop-advanced-tracing` org. No
    OpenAI key is handed out — OpenAI calls go through the Braintrust AI gateway using
    the OpenAI key configured in the org (make sure one is set under the org's AI
