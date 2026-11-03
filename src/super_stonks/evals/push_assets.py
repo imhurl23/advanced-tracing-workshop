@@ -27,7 +27,9 @@ from pydantic import BaseModel
 
 from super_stonks.evals.tool_checks import ticker_of, tool_call_ok
 
-PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]
+# The project name is used only when pushing (Makefile requires it). The hosted
+# runtime imports this module to find the handler, without the participant's env.
+PROJECT = os.environ.get("BRAINTRUST_DEFAULT_PROJECT", "")
 project = projects.create(name=PROJECT)
 
 

@@ -118,11 +118,10 @@ Run this **before fixing the code**:
 
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
-bt experiments view
 ```
 
-Select the new experiment and note its name and `tool_call_succeeded` score. Some
-lookups may recover, so the baseline need not be zero.
+Read the summary printed in the terminal. Note the experiment name and
+`tool_call_succeeded` score. Some lookups may recover, so the baseline need not be zero.
 
 ## 10. Fix the agent
 
@@ -150,11 +149,11 @@ Check that the tool received `BRK-B` and returned data for that share class.
 
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
-bt experiments view
 ```
 
-Select the new experiment. Compare its scores with your baseline; tool success should
-improve. Inspect any remaining failures and confirm the requested share class is preserved.
+Read the score comparison printed in the terminal; tool success should improve.
+To reopen it, run the `bt experiments compare` command printed below the results.
+Inspect any remaining failures and confirm the requested share class is preserved.
 
 ## 12. Enable online scoring
 
