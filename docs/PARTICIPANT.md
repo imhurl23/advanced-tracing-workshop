@@ -33,7 +33,6 @@ OPENAI_BASE_URL="https://gateway.braintrust.dev"
 OPENAI_API_KEY="${BRAINTRUST_API_KEY}"
 
 BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
-# BRAINTRUST_PROFILE="dataoutpost-workshop"
 BRAINTRUST_ORG_NAME="dataoutpost-workshop"
 ```
 
@@ -78,99 +77,141 @@ bt view logs
 bt topics open --project super-stonks
 ```
 
-Target the **"Current stock price analysis"** cluster.
+Topics groups the shared project's traces by **what users are asking for** — stock
+research, price checks, retirement questions, and so on. It's a great map of the traffic,
+but notice what it doesn't tell you: whether the agent actually *answered* any of it. The
+"stock research" cluster looks perfectly healthy here.
 
-## 5. Investigate it with your coding agent
+## 5. Find the problem with Patterns
+
+> **Note:** instructor led.
+
+Patterns runs on a schedule, reads the recent traces, and records **recurring problems**
+with evidence, frequency, and a suggested fix — including failures that never raise an
+error. Open the Patterns page for `super-stonks`:
+
+```text
+https://www.braintrust.dev/app/dataoutpost-workshop/p/super-stonks/patterns
+```
+
+Target the **"Stock analysis rejects dotted share-class tickers"** pattern.
+
+## 6. Investigate it with your coding agent
 
 Ask your coding agent:
 ```text
-How are traces performing in the "Current stock price analysis" topic cluster in 'super-stonks'? Pull a representative sample, compare what the user asked vs. how the agent responded.
+Use the Braintrust MCP server to find the "Stock analysis rejects dotted share-class tickers" pattern in 'super-stonks'. Pull a representative sample of its traces and compare what the user asked, which ticker the agent passed to its tools, and what the tools returned. What's the root cause?
 ```
-Accept the dialogs while observing what Claude does to answer the question.
+Accept the dialogs while observing what your agent does to answer the question.
 
-It should find the gap: price questions the agent can't answer — no realtime-price tool.
+It should find it: users type class shares with a dot (`BRK.B`), but Yahoo Finance only
+knows the dash form (`BRK-B`). The tool returns "No data found" as a normal result — no
+error on the span — so the agent guesses another symbol or tells the user the ticker is
+wrong.
 
-## 6. Curate the traces from the cluster into your dataset
+## 7. Curate the pattern's evidence into your dataset
 
-Now, add 10 traces to a dataset in your own project for offline evaluation. Prompt your coding agent to do this.
-```text
-Load the agent-auto-improvement skill from the Braintrust MCP server, then capture 10 traces from the "Current stock price analysis" cluster as a dataset 'current-price-gap-offline' — the failure taxonomy/metadata is the price gap. Use the bt CLI to capture the traces and create the dataset.
-```
-As before, accept the dialogs while observing what Claude is doing.
-
-Once the dataset is created, exit Claude with Ctrl + C, then view it with:
+The pattern records exactly which spans are affected. Turn that evidence into a dataset in
+your own project — one row per failing turn, with the user's question as the input and the
+broken reply and failing tool call in the metadata:
 ```bash
-bt datasets view current-price-gap-offline
+make curate-dataset
 ```
 
-## 7. Select a scorer and push it to your project
+View it with:
+```bash
+bt datasets view share-class-tickers
+```
 
-Evals require at least one scorer. We've already defined the scorer in the code, and we can push scorers to our Braintrust project. This ensures versioned scorers are available across the team.
+## 8. Select a scorer
+
+Evals require at least one scorer. We've already defined it in the code:
+`tool_call_succeeded` checks that **each time a tool fires, it returns data** rather than
+an `{"error": ...}` payload. The eval runs it locally; you'll push it to Braintrust in
+step 12 for online scoring.
+
+## 9. Baseline experiment
+
+`qa_eval.py` runs the agent over your dataset and scores each run with
+`tool_call_succeeded` (the share of tool calls that returned data) and
+`response_grounded_in_data` (an LLM judge: does the answer cite real figures?).
+```bash
+uv run bt eval src/super_stonks/evals/qa_eval.py
+```
+
+When the eval completes, view the results. Look at `tool_call_succeeded` — it should be
+low, because every row in this dataset is a ticker the tools can't look up.
+
+## 10. Fix the agent
+
+Start your coding agent again, then instruct it to do the following:
+```text
+Fix the "Stock analysis rejects dotted share-class tickers" pattern. Normalize the ticker once in agent.py::_invoke_tool before either tool runs — don't change the tool functions.
+```
+When your coding agent is done, exit with Ctrl + C.
+
+Run the agent again and pick the **"Should I buy BRK.B right now?"** starting point (or
+ask about any class share yourself):
+```bash
+make agent
+```
+
+When done, interrupt the agent with Ctrl + C, then view the interaction(s) in the console.
+Look at the tool span: it should now contain real data instead of "No data found".
+```bash
+bt view logs
+```
+
+## 11. Evaluate the updated agent against the baseline
+
+With the fix in place, run the eval experiment again.
+```bash
+uv run bt eval src/super_stonks/evals/qa_eval.py
+```
+
+The new experiment should score much higher on `tool_call_succeeded` than the baseline
+(and on grounding, since the answers now have real data to cite).
+
+## 12. Enable online scoring for the new scorer
+
+First, push the scorer to your Braintrust project so a versioned copy is available across
+the team:
 ```bash
 make push-scorer
 ```
 
-Let's review the scorer we just pushed to our project. Select `response_grounded_in_data` when prompted.
+Review the scorer you just pushed. Select `tool_call_succeeded` when prompted.
 ```bash
 bt scorers view
 ```
 
-## 8. Baseline experiment (tool OFF)
-
-`qa_eval.py` runs the agent over your dataset and scores each answer with the grounding
-judge. Use the following command to run your eval.
-```bash
-EVAL_DATASET=current-price-gap-offline uv run bt eval src/super_stonks/evals/qa_eval.py
-```
-
-When the eval completes, view the results. Specifically, look for the scores from the scorer you just added, `response_grounded_in_data`.
-
-## 9. Close the gap
-
-The agent is missing a tool that can pull real-time stock prices from Yahoo Finance. We've already written this tool in the code, but it is currently disabled (commented out). `GAP.md` specifies exactly where to uncomment it so the tool is usable by the agent.
-
-Start your coding agent again, then instruct it to do the following:
-```text
-Fill the tool gap @GAP.md.
-```
-When your coding agent is done, the tool should now be included in the agent's tools list. Exit with Ctrl + C.
-
-Run the agent again, then generate fresh traffic by conversing with it:
-```bash
-make agent
-```
-
-When done, interrupt the agent with Ctrl + C, then view the interaction(s) in the console. Look specifically for the new tool spans.
-```bash
-bt view logs
-```
-
-## 10. A/B test the updated agent against the previous version
-
-With the new tool available to the agent, run the eval experiment again.
-```bash
-EVAL_DATASET=current-price-gap-offline uv run bt eval src/super_stonks/evals/qa_eval.py
-```
-
-The new experiment should have a higher grounding score than the previous one. This is a good sign that the tool is working and the agent is able to use it.
-
-## 11. Enable online scoring automation for the new scorer
-
-Now we want to enable online scoring automation for the new scorer. This will automatically score new traces as they are logged to Braintrust, protecting us from regressions in the future.
+Now turn the scorer on for live traffic. Every tool span logged to your project will be
+scored as it arrives — so if a ticker format ever starts failing again, you'll see it.
 ```bash
 make automations
 ```
 
-## 12. Validate
+## 13. Validate
 
-Run the agent again to generate fresh traffic:
+Run the agent again to generate fresh traffic, including a class-share question:
 ```bash
 make agent
 ```
 
-When done, interrupt the agent with Ctrl + C, then view the scoring added to the new trace in the logs:
+When done, interrupt the agent with Ctrl + C, then view the `tool_call_succeeded` score on
+the new trace's tool spans:
 ```bash
 bt view logs
+```
+
+Or list your tool calls with their scores in one table:
+```bash
+PID=$(bt projects list --json | jq -r --arg p "$BRAINTRUST_DEFAULT_PROJECT" '.[] | select(.name==$p) | .id')
+bt sql "SELECT created, span_attributes.name AS tool, input.ticker AS ticker,
+               scores.tool_call_succeeded AS score
+        FROM project_logs('$PID')
+        WHERE span_attributes.type = 'tool' AND created >= NOW() - INTERVAL 1 DAY
+        ORDER BY created DESC LIMIT 20"
 ```
 
 Congratulations, you have just executed the Braintrust flywheel!

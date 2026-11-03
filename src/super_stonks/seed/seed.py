@@ -1,4 +1,4 @@
-"""Drive the (toolless) agent to seed production-like traces.
+"""Drive the agent to seed production-like traces.
 
 The span tree and the logged input/output/metadata mirror the Streamlit app
 (`super_stonks/app.py`) exactly, so seeded "sims" are indistinguishable in shape from
@@ -9,15 +9,21 @@ real traffic:
        └─ { LLM span, TOOL span }
     (the root/conversation span is logged each turn with input = the list of user messages)
 
-Topics must be enabled first — the Makefile makes `topics` upstream of seeding.
-Sessions are a mix of single- and multi-turn (see scenarios.py).
+Patterns finds the planted share-class ticker failures from these traces (see
+scenarios.py); Topics clusters them too. The Makefile enables both upstream of seeding
+(`make topics patterns`). Sessions
+are a mix of single- and multi-turn.
 
-    uv run python -m super_stonks.seed.seed --count 10
+Each run draws a fresh random mix (printed as `seed=N`), so top-up runs don't repeat
+the same questions. Pass `--seed N` to reproduce a run exactly.
+
+    uv run python -m super_stonks.seed.seed --count 10 [--seed N]
 """
 
 from __future__ import annotations
 
 import argparse
+import random
 import uuid
 from typing import Any
 
@@ -101,12 +107,14 @@ def _seed_session(scenario: dict, project: str) -> None:
     braintrust.flush()
 
 
-def run(count: int) -> None:
+def run(count: int, seed: int | None = None) -> None:
     init_braintrust_logger()  # sets the active logger → spans land in the project
     project = get_braintrust_project_name()
-    scenarios = build(count)
+    if seed is None:
+        seed = random.randrange(1_000_000)
+    scenarios = build(count, seed=seed)
     turns_total = sum(len(s["turns"]) for s in scenarios)
-    print(f"[seed] seeding {len(scenarios)} sessions ({turns_total} turns) into '{project}' …")
+    print(f"[seed] seeding {len(scenarios)} sessions ({turns_total} turns) into '{project}' (seed={seed}) …")
 
     for i, scenario in enumerate(scenarios, start=1):
         _seed_session(scenario, project)
@@ -119,7 +127,9 @@ def run(count: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Super Stonks traces.")
     parser.add_argument("--count", type=int, default=10, help="number of sessions/traces to seed")
-    run(parser.parse_args().count)
+    parser.add_argument("--seed", type=int, default=None, help="RNG seed to reproduce a run (default: random)")
+    args = parser.parse_args()
+    run(args.count, args.seed)
 
 
 if __name__ == "__main__":

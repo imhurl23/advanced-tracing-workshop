@@ -1,15 +1,15 @@
 # Seeding Milestones — provisioning the workshop project
 
 The build plan for standing up a **live, pre-seeded Braintrust project** before the
-workshop, then the **live workshop arc** that closes the gap. Pre-work leaves the
-project with: the price tool **commented out**, Topics enabled, and ~1,000
-production-like traces where realtime-price asks fail. The live arc then observes the
-gap in Topics, builds a grounding scorer, proves it with two experiments, and promotes
-it to an online score.
+workshop, then the **live workshop arc** that fixes what it surfaces. Pre-work leaves the
+project with: **Topics** and the **Patterns** automation enabled, and a few hundred production-like
+traces in which users type class shares in dot notation (`BRK.B`) and the tools quietly
+return "No data found". The live arc finds that in Patterns, builds a scorer, proves the
+fix with two experiments, and promotes the scorer to an online score.
 
-> **The agent already exists** (`src/super_stonks/agent/`, on `dev`/`main`). These milestones wire
-> everything *around* it. The trace shape is now known, so scorer scope is **resolved
-> below**.
+> **The agent already exists** (`src/super_stonks/agent/`). These milestones wire
+> everything *around* it. Both tools (`get_stock_performance`, `analyze_stock_buy`) are
+> **enabled** — the failure lives in the traffic, not in a disabled tool.
 
 **Status legend:** `[ ]` not started · `[~]` in progress · `[x]` done
 
@@ -17,485 +17,325 @@ it to an online score.
 
 ## The workshop arc (the story these milestones serve)
 
-1. **Comment out `get_stock_performance`** → the agent has no tool for realtime data.
-2. **Seed ~1,000 traces** (M0–M3). Realtime-price asks get answered from parametric
-   knowledge — ungrounded, often wrong.
-3. **Observe Topics clusters** (§8) → a big "realtime stock info" cluster surfaces the
-   demand the agent can't serve. *That's the gap.*
-4. **Build a scorer** that measures whether the response is **grounded in tool data**
-   (`response_grounded_in_data`, already skeletoned in `src/super_stonks/evals/scorers.py`).
-5. **Experiment 1 — baseline** (tool still off): run it as a Braintrust experiment →
-   the grounding score is **poor**.
-6. **Uncomment the tool.**
-7. **Experiment 2** (tool on): same dataset, same scorer → grounding score **jumps**.
-8. **Push the scorer + add it as an online automation** so it scores live production.
-9. **Generate new traffic** → the online score confirms the improved agent does better.
+1. **Seed the shared `super-stonks` project** (M2–M3). ~12% of sessions ask about
+   share-class or renamed tickers the way users type them (`BRK.B`, `BF.B`, `HEI.A`,
+   `LEN.B`, `SQ`). Yahoo/yfinance only knows the dash form (`BRK-B`), so the tools return
+   `{"error": "No data found …"}` as a **normal result** — no span error.
+2. **Patterns runs** (daily) and records the recurring failure — *"Stock analysis rejects
+   dotted share-class tickers"* — without being told what to look for (`PARTICIPANT.md` step 5).
+3. **Investigate it** with a coding agent via the Braintrust MCP + `bt` (step 6).
+4. **Curate** the pattern's traces into a dataset in each attendee's own project (step 7).
+5. **Push the scorer** that catches it — `tool_call_succeeded`, a code check that each
+   tool call returned data.
+6. **Experiment 1 — baseline**: tickers passed through as typed → score is **poor**.
+7. **Fix**: normalize the ticker once in `agent.py::_invoke_tool` (`.` → `-`, plus an
+   alias map such as `SQ` → `XYZ`).
+8. **Experiment 2**: same dataset, same scorer → score **jumps**.
+9. **Push the scorer + add it as an online automation**, generate new traffic, confirm.
 
-> ⚠️ **CLI limitation baked into the plan (step 8).** The `bt` CLI can push the scorer
-> function but **cannot create the online-scoring automation** — see the callout below.
-> That step uses the REST API (scriptable) or the UI.
+> **Topics still runs** during seeding (`make topics`, upstream of the seed) so the
+> project has clusters to browse — but the key finding comes from **Patterns**.
+
+> ⚠️ **CLI limitations baked into the plan.** The `bt` CLI can't create a **Patterns**
+> automation (M2) or an **online-scoring** automation (M6). Both are scripted against the
+> REST API (`make patterns`, `make automations`).
 
 ---
 
 ## Where everything lives (verified against the code)
 
-**Org:** always `workshop-advanced-tracing` — pinned by the `BRAINTRUST_PROFILE`
-attendees set in `WORKSHOP.md §4.2`.
+**Org:** always `dataoutpost-workshop` — pinned by the `BRAINTRUST_ORG_NAME` in `.env`
+(`PARTICIPANT.md` step 2).
 
-**Project:** resolved from **`BRAINTRUST_DEFAULT_PROJECT`** (the `bt`-native project
-var, also set in §4.2). Every command, seed, eval, and automation reads it — attendees
-each point it at their own project; the presenter points it at the seed project(s) when
-seeding ahead of time. **No project name is hardcoded.**
+**Project:** resolved from **`BRAINTRUST_DEFAULT_PROJECT`**. Every command, seed, eval,
+and automation reads it — attendees point it at their own project; the presenter
+overrides it inline to seed the shared one:
 
-> ✅ Code alignment (done): `src/super_stonks/agent/config.py::get_braintrust_project_name()` now
-> reads **`BRAINTRUST_DEFAULT_PROJECT`** first (falls back to `BRAINTRUST_PROJECT_NAME`,
-> then the default). Both `python -m super_stonks.agent` and the **Streamlit app** log through
-> this resolver, so agent traffic lands in the same project the CLI uses. `.env.example`
-> updated to match. Still to do when you write them: `seed.py`, `qa_eval.py`, and
-> `configure.py` read `BRAINTRUST_DEFAULT_PROJECT` too (qa_eval scaffold already does).
+```bash
+set -a; source .env; set +a; BRAINTRUST_DEFAULT_PROJECT=super-stonks make prepare
+```
 
-**Stack:** LangGraph + OpenAI **gpt-4o-mini**, wrapped with `braintrust.wrap_openai`;
-market data via **yfinance**; system prompt is the **hardcoded `STOCK_CHAT_SYSTEM`** —
-no prompt registry, no `load_prompt`, nothing pushed. `exa` is **not used anywhere** —
-verified across all files and git refs.
+`agent/config.py::get_braintrust_project_name()` reads `BRAINTRUST_DEFAULT_PROJECT`
+(falls back to `BRAINTRUST_PROJECT_NAME`; errors if neither is set — no hardcoded default). The CLI agent, the
+Streamlit app, and the seeder all log through it.
 
-**Config & secrets split:**
-- **`.env`** (loaded by Python via `load_dotenv()`): `BRAINTRUST_API_KEY` — the one secret participants get; `OPENAI_API_KEY` reuses it (`"${BRAINTRUST_API_KEY}"`) and `OPENAI_BASE_URL` points at the Braintrust AI gateway, which uses the org's configured OpenAI key.
-- **Context** (also in `.env`, sourced into the shell per `WORKSHOP.md §4.2`): `BRAINTRUST_PROFILE` + `BRAINTRUST_ORG_NAME` (bt auth + org) and `BRAINTRUST_DEFAULT_PROJECT` (project, read by bt **and** Python). `bt` doesn't read `.env` itself — source it; no `--env-file`.
+**Stack:** LangGraph + OpenAI **gpt-4o-mini** through the Braintrust AI gateway, wrapped
+with `braintrust.wrap_openai`; market data via **yfinance**; system prompt is the
+**hardcoded `STOCK_CHAT_SYSTEM`** — no prompt registry, nothing pushed.
+
+**Config:** everything is in **`.env`** (template `.env.example`):
+`BRAINTRUST_API_KEY` (the one key; `OPENAI_API_KEY` reuses it via the gateway),
+`OPENAI_BASE_URL`, `BRAINTRUST_ORG_NAME`, `BRAINTRUST_DEFAULT_PROJECT`. Python loads it
+with `load_dotenv()`; the shell (and `bt`) gets it from `set -a; source .env; set +a`.
+`bt` authenticates with the exported API key — no `bt login` or profile needed.
 
 | Path | What it is |
 |---|---|
-| `src/super_stonks/agent/__main__.py` | CLI entry (`python -m super_stonks.agent`). `load_dotenv()`. Interactive multi-turn session. **Owns the manual span tree**: `stonks-sessions` (root) → `turn_{n}`, each `turn_span.log(input=…, output=…)`. |
-| `src/super_stonks/agent/agent.py` | LangGraph: `agent` ⟷ `tools` nodes; compiled `graph`. **Hardcoded `STOCK_CHAT_SYSTEM`** (no registry call); honors `state["model"]` override (used by evals). `wrap_openai(OpenAI())` → LLM child spans. |
-| `src/super_stonks/agent/tools.py` | `TOOLS_SPEC` + two `@traced` TOOL-span tools: `get_stock_performance` (yfinance: current price + day/week/year %) ← **commented out in M1**, `analyze_stock_buy` (RSI / MA cross / 52w / analyst → BUY·HOLD·SELL). |
-| `src/super_stonks/agent/prompts.py` | `STOCK_CHAT_SYSTEM` — the agent's only system prompt (personal-finance scope). |
-| `src/super_stonks/agent/config.py` | Project-name resolver + `init_braintrust_logger()`. |
-| `src/super_stonks/agent/state.py` | `AgentState` TypedDict — `{messages, model}`. |
-| `src/super_stonks/app.py` | Streamlit UI (`streamlit run src/super_stonks/app.py`) — live-demo front end for §5.1. |
-| `src/super_stonks/evals/scorers.py` | **Scorer skeleton** — 7 handlers + `SpanParams`/`TraceParams` models. The workshop scorer `response_grounded_in_data` lives here. |
+| `src/super_stonks/agent/__main__.py` | CLI entry (`python -m super_stonks.agent`). Owns the manual span tree: `stonks-sessions` (root) → `turn_{n}`. |
+| `src/super_stonks/agent/agent.py` | LangGraph `agent` ⟷ `tools` nodes; compiled `graph`. `_invoke_tool` routes tool calls — **the fix goes here**. OpenAI client reads key + base URL from `.env`. |
+| `src/super_stonks/agent/tools.py` | `TOOLS_SPEC` + two `@traced` TOOL-span tools: `get_stock_performance` (price + day/week/year %) and `analyze_stock_buy` (RSI / MA cross / 52w / analyst → BUY·HOLD·SELL). Both return `{"error": …}` for unknown symbols. |
+| `src/super_stonks/app.py` | Streamlit UI (`make agent`) — same span tree as the CLI. |
+| `src/super_stonks/seed/scenarios.py` | Weighted question mix, incl. the `share_class` bucket that plants the failure. |
+| `src/super_stonks/seed/seed.py` | Drives `graph.invoke` over the mix and logs sessions exactly like Streamlit traffic. |
+| `src/super_stonks/provision/patterns.py` | Enables the Patterns automation via the REST API (`make patterns`). |
+| `src/super_stonks/provision/configure.py` | Creates the online-scoring automation via the REST API (`make automations`). |
+| `src/super_stonks/provision/copy_dataset.py` | Copies a `super-stonks` dataset to every other org project. |
+| `src/super_stonks/evals/` | `scorers.py`, `judge_prompts.py`, `push_assets.py`, `qa_eval.py`. |
 
-**Actual trace shape (drives all scope decisions):**
+**Trace shape:**
 
 ```
-stonks-sessions          (root, span_attributes.type = task)   ← whole session
-└─ turn_0                    (type = task)   logs input=user_input, output=reply
+stonks-sessions          (root, type = task; metadata.entrypoint = "streamlit")
+└─ turn_0                    (type = task)   input = user text, output = reply
    ├─ chat.completions.create   (LLM span, via wrap_openai)
    └─ get_stock_performance / analyze_stock_buy   (TOOL span, via @traced)
 └─ turn_1
    └─ …
 ```
 
-With `get_stock_performance` commented out (M1), realtime-price turns have **no TOOL
-span** — nothing for the grounding scorer to ground against.
-
-> **Span names are shared across entrypoints.** Both the CLI (`__main__.py`) and the
-> Streamlit app (`app.py`) now emit root `stonks-sessions` + `turn_{n}` (0-based). The
-> **seed (M3) must emit the same wrapper** around `graph.invoke` — the graph itself does
-> *not* create the session/turn spans, the entrypoint does. Keep the names identical or
-> scorers / Topics / `btql_filter`s won't apply uniformly to seeded vs. live traffic.
+> **Span names are shared across entrypoints.** The CLI, Streamlit, and the seeder all
+> emit `stonks-sessions` + `turn_{n}` (0-based). The graph itself doesn't create them —
+> the entrypoint does. Keep the names identical or scorers / Patterns evidence /
+> `btql_filter`s won't apply uniformly to seeded vs. live traffic.
 
 ---
 
-## The gap — comment out the price tool
+## The planted failure — dotted share-class tickers
 
-The gap is created deliberately: **comment out `get_stock_performance` in
-`src/super_stonks/agent/tools.py`** (remove it from `TOOLS_SPEC` and from `_invoke_tool` routing in
-`src/super_stonks/agent/agent.py`). With it gone, the agent has no way to fetch realtime prices, so
-seeded realtime-price asks are answered from parametric knowledge — ungrounded and
-often stale/wrong. `analyze_stock_buy` stays in (the workshop is about the *price*
-grounding gap, not the research path).
+Nothing in the code is broken on purpose. The failure is in the **traffic**: the seed's
+`share_class` bucket asks about `BRK.B`, `BF.B`, `HEI.A`, `LEN.B` (dot notation) and `SQ`
+(renamed to `XYZ`). yfinance returns empty history for those, so the tool returns
+`{"error": "No data found for 'BRK.B'. Check the ticker symbol."}` as an ordinary
+result. The span has no error flag, so error filters and dashboards miss it; the agent
+then guesses another symbol (sometimes `BRK-B`, sometimes a wrong one like `BLOCK`) or
+tells the user the ticker is invalid.
 
-The scorer that measures this — **`response_grounded_in_data`** — is already skeletoned
-in `src/super_stonks/evals/scorers.py`: an LLM judge that checks the response cites specific
-prices/percentages that appear in the tool data. With the tool commented out there are
-no tool figures to ground on, so the score is low by construction. Uncommenting the
-tool is the fix that moves it.
+**Don't label it in the data.** Seeded sessions carry no bucket/scenario metadata and log
+`entrypoint = "streamlit"`, so Patterns has to infer the failure from behavior — that's
+the demo.
 
----
-
-## ⚠️ CLI capability check — online scoring automations (verified `bt` v0.11.x)
-
-**Question:** can `/braintrust` (the `bt` CLI) create the online-scoring automation for
-step 8, or does that need the UI?
-
-**Answer: the CLI cannot create an online-scoring automation.** Verified against the
-full subcommand tree:
-
-| Task | CLI support |
-|---|---|
-| Push a scorer **function** | ✅ `bt functions push` (also `bt scorers list/view/invoke`) |
-| Enable a **Topics** automation | ✅ `bt topics config enable` |
-| Create an **online-scoring** automation (run a scorer on X% of prod logs) | ❌ **no command** — Topics is the *only* automation type the CLI exposes |
-
-Online scores are `project_score` objects with `score_type: "online"`. They can only be
-created via:
-- **REST API / SDK** — `PUT /v1/project_score` with the `config.online` block (sampling
-  rate, scorer function IDs, `apply_to_root_span`, `btql_filter`). This is what the
-  reference `bt-cost-optimizer-demo/phase/complete/configure.ts` does. **Scriptable →
-  wrap it in `make automations`.**
-- **The UI** — Project → **Configuration → Online scoring** → add rule.
-
-**Recommendation for the workshop:** push the scorer with `bt functions push` (a clean
-CLI moment), then add the online automation with a one-line `make automations` that
-hits the API. If you'd rather have a visual "flip the switch" beat on screen, do that
-one step in the UI — but there is no `bt` command for it.
+The fix (live, M5) is a ticker normalization in `agent.py::_invoke_tool` before either
+tool runs. Don't change the tool functions or `analyze_stock_buy` itself.
 
 ---
 
 ## Order of operations
 
-Topics only cluster spans generated **after** it's enabled, so enable Topics before
-seeding. The scorer and the online automation come **later**, in the live arc — they
-are *not* part of pre-seed provisioning.
+Enable Topics + Patterns, smoke-seed, verify, then full-seed. Topics only clusters
+spans logged **after** it's enabled, so it must come first. Patterns reads a 30-day window on
+a daily schedule, so it picks up traces seeded before or after it's enabled; a Pattern
+stays **active** only while matching traces keep arriving (activity in the last two
+weekdays) — hence the top-up.
 
 ```
-PRE-WORK:   comment out tool ─▶ enable Topics ─▶ SMOKE seed (10) ─▶ verify ─▶ FULL seed (1k)
-                M1                 M2              M3-smoke           gate      M3-full
+PRE-WORK:   enable Topics + Patterns ─▶ SMOKE seed (10) ─▶ verify ─▶ FULL seed (COUNT) ─▶ … ─▶ TOP-UP (day before)
+                    M2                    M3-smoke          gate        M3-full                 M3-top-up
 
-LIVE ARC:   observe Topics ─▶ finalize grounding scorer ─▶ exp1 (tool off, poor) ─▶ uncomment tool ─▶ exp2 (tool on, better)
-                §8                 M4                          M5                        M5               M5
-            ─▶ bt functions push scorer ─▶ make automations (API) ─▶ new traffic scored live
-                    M6                          M6                        M6
+LIVE ARC:   Patterns (step 5) ─▶ curate (step 7) ─▶ scorer (M4) ─▶ exp1 (as typed, poor) ─▶ ticker fix ─▶ exp2 (better)
+            ─▶ make push-scorer ─▶ make automations ─▶ new traffic scored live
+                    M6                   M6                     M6
 ```
-
-`make provision` chains the pre-work (M2→M3-smoke) and stops at the smoke gate.
 
 ---
 
 ## Milestone 0 — Scaffold (uv + make)
 
-Python project managed with **uv**; all workflows driven by **make**. The agent code
-already exists — this milestone adds the packaging + operator entry points around it.
-
 | Status | Task | Notes |
 |---|---|---|
-| [x] | `pyproject.toml` + `uv.lock` | **done** — package **`super-stonks`** (hatchling, src-layout, `packages = ["src/super_stonks"]`); deps: `braintrust`, `autoevals`, `openai`, `langgraph`, `yfinance`, `click`, `streamlit`, `python-dotenv`, `pydantic`; `requires-python >=3.10`. `uv sync` installs it editable → `import super_stonks…` works everywhere (verified) |
-| [ ] | `make setup` → `uv sync` + copy `.env.example`→`.env` if missing | `.env` holds everything: `BRAINTRUST_API_KEY` (reused as `OPENAI_API_KEY` via the gateway) + `BRAINTRUST_PROFILE` / `BRAINTRUST_ORG_NAME` / `BRAINTRUST_DEFAULT_PROJECT`; sourced once per terminal (§4.2) |
-| [x] | `Makefile` with the target list (below) | **done** — `setup`, `agent`, `topics`, `push-scorer` (pushes `push_assets.py`) work now; `seed*` + `automations` guarded with a pointer to their milestone until `seed.py`/`configure.py` exist |
-| [x] | `.gitignore` already present | keeps `.env` out (verified) |
+| [x] | `pyproject.toml` + `uv.lock` | package **`super-stonks`** (hatchling, src-layout); `uv sync` installs it editable → `import super_stonks…` works everywhere |
+| [x] | `make setup` → `uv sync` + copy `.env.example`→`.env` if missing | then fill the two `<…>` values and source it |
+| [x] | `Makefile` targets (below) | |
+| [x] | `.gitignore` keeps `.env` out | verified |
 
-**Actual + planned layout** (✎ = to create):
-
-**src-layout — the importable package is `super_stonks` (installed editable by `uv sync`).**
+**Make targets:**
 
 ```
-pyproject.toml            # ✓ uv package "super-stonks" (hatchling, src-layout)
-uv.lock                   # ✓ resolved lockfile
-Makefile                  # ✓ operator entry points (setup/streamlit/topics live; rest guarded)
-.env.example              # ✓ secrets only
-src/super_stonks/
-  __init__.py             # ✓ package init
-  app.py                  # ✓ Streamlit UI (was app/streamlit.py)
-  agent/
-    __init__.py           # ✓
-    __main__.py           # ✓ CLI entry + span tree (python -m super_stonks.agent)
-    agent.py              # ✓ LangGraph graph
-    tools.py              # ✓ get_stock_performance, analyze_stock_buy
-    prompts.py            # ✓ STOCK_CHAT_SYSTEM (used as-is, not pushed)
-    config.py  state.py   # ✓
-  evals/
-    __init__.py           # ✓
-    judge_prompts.py      # ✓ shared LLM-judge prompts (online prompt scorer + offline LLMClassifier)
-    scorers.py            # ✓ offline scorers (grounding scorer + skeleton) built from judge_prompts
-    push_assets.py        # ✓ pushes ONLY the grounded scorer online (the reveal, M6)
-    qa_eval.py            # ✎ experiment scaffold for the two eval runs (M5)
-  provision/
-    __init__.py           # ✓
-    configure.py          # ✎ enable Topics (M2) + create online automation via API (M6)
-    copy_dataset.py       # ✓ copy a dataset from super-stonks to all other org projects
-  seed/
-    __init__.py           # ✎
-    scenarios.py          # ✎ use-case mix incl. the price-ask gap (M3)
-    seed.py               # ✎ drives graph.invoke → traces (M3)
-```
-
-Because the package is installed, `import super_stonks…` works everywhere — including
-under `streamlit run src/super_stonks/app.py` — with **no `PYTHONPATH` needed**.
-
-**Make targets (contract for later milestones):**
-
-```
-make setup            # M0  uv sync + .env bootstrap
-make agent            # run the agent's Streamlit app (live demo — §5.1)
-make topics           # M2  enable Topics programmatically
-make seed-smoke       # M3  seed 10 traces (tool OFF)
-make seed             # M3  seed 1,000 traces (tool OFF) — the full workload
-make provision        # M2 then SMOKE seed (10) and verify — stops at the gate
+make setup            # uv sync + .env bootstrap
+make agent            # Streamlit app (live demo — step 3)
+make project          # M2  create the project if it doesn't exist (bt projects create)
+make topics           # M2  enable Topics (bt topics config enable) — clustering, not the key finding
+make patterns         # M2  enable the Patterns automation (REST API; idempotent)
+make seed-smoke       # M3  topics + patterns + seed 10 traces
+make seed             # M3  seed-smoke + seed COUNT traces (default 500)
+make top-up           # M3  seed COUNT more traces only (keeps Patterns active)
+make provision        # alias for seed-smoke — stops at the smoke gate
+make prepare          # one-shot: project → topics + patterns → smoke → full seed
 make copy-dataset DATASET=<name>   # fan a super-stonks dataset out to all other org projects
-make push-scorer      # M6  bt functions push the grounding scorer
-make automations      # M6  create the online-scoring automation via API (no bt cmd)
+make push-scorer      # M6  bt functions push the tool-success scorer
+make automations      # M6  create the online-scoring automation (REST API)
 ```
 
-> **`make copy-dataset`** (`provision/copy_dataset.py`): the presenter curates a dataset
-> in the primary **`super-stonks`** project, then fans it out to every other project in
-> the org so each attendee starts from the same data. Projects are enumerated with the
-> **bt CLI** (`bt projects list --json`, profile auth); rows are copied with the
-> **SDK** (`init_dataset` — the CLI has no cross-project copy). Row `id`s are preserved,
-> so re-running upserts (idempotent).
-
-```makefile
-# make agent — super_stonks is an installed package, so no PYTHONPATH needed
-agent:
-	uv run streamlit run src/super_stonks/app.py
-```
+Seed sizes and mixes: `COUNT=200`, and `SEED=N` to reproduce a run exactly. By default
+every run draws a fresh random mix (printed as `seed=N`), so top-ups don't repeat the
+same questions.
 
 ---
 
-## Milestone 1 — Comment out the price tool (create the gap)
-
-Deliberately break the realtime-price path so the seed shows a real deficiency.
+## Milestone 1 — Agent tools (both enabled)
 
 | Status | Task | Notes |
 |---|---|---|
-| [x] | Comment out `get_stock_performance` in `src/super_stonks/agent/tools.py` | **done** — its `TOOLS_SPEC` entry is a commented block behind a `THE GAP` marker; the `@traced` fn stays defined |
-| [x] | Drop its route in `src/super_stonks/agent/agent.py::_invoke_tool` | **done** — route commented (same `THE GAP` marker); a stray/hallucinated call now returns `Unknown tool` |
-| [x] | Leave `analyze_stock_buy` intact | the workshop is about the *price-grounding* gap, not research |
-| [ ] | Sanity-run one price ask locally | `python -m super_stonks.agent` → confirm it answers ungrounded, no TOOL span |
-
-> **The gap is active now.** Only `analyze_stock_buy` is exposed. To close it in M5,
-> uncomment **two** clearly-marked blocks: the `get_stock_performance` entry in
-> `tools.py::TOOLS_SPEC` and its route in `agent.py::_invoke_tool` (both flagged
-> `THE GAP`).
+| [x] | `get_stock_performance` enabled in `TOOLS_SPEC` and routed in `_invoke_tool` | the old price-gap setup is retired |
+| [x] | `analyze_stock_buy` unchanged | |
+| [x] | Confirm the failure reproduces | `get_stock_performance("BRK.B")` → `{"error": …}`; `"BRK-B"` → real data |
 
 ---
 
-## Milestone 2 — Enable Topics programmatically (`make topics`)
-
-Turn Topics **on before seeding** so the ~1k traces cluster — the realtime-price cluster
-is what §8 "discovers".
+## Milestone 2 — Enable Topics + Patterns (`make topics`, `make patterns`)
 
 | Status | Task | Notes |
 |---|---|---|
-| [ ] | `src/super_stonks/provision/configure.py` enables Topics via `bt topics config enable` | shell out; idempotent (`delete --force` then `enable`) |
-| [ ] | (optional) custom `intent` facet so a clean `realtime_price` topic forms | facet fn + topic-map classifier via API |
-| [ ] | `make topics` runs it | |
+| [x] | `make topics` → `bt topics config enable` | runs before seeding so seeded spans cluster |
+| [x] | `provision/patterns.py` creates the automation via `POST /v1/project_automation` | idempotent: skips if the project already has a Patterns automation |
+| [x] | Enabled on `super-stonks` | automation `Patterns` (`0b679557-…`), daily 9am PT, 30-day window |
+| [ ] | Verify the create path on a fresh project | only the "already enabled" path has been exercised by the script |
 
-```bash
-# project comes from $BRAINTRUST_DEFAULT_PROJECT — no --project needed
-bt topics config enable \
-  --name "Workshop Topics" \
-  --topic-window 1d \
-  --generation-cadence 1h \
-  --no-input
+The automation config (mirrors what the Braintrust MCP's `create_scheduled_loop_job`
+produces):
+
+```jsonc
+{
+  "event_type": "windowed",
+  "product_origin": "patterns",
+  "window": {
+    "window_seconds": 2592000,                       // 30 days
+    "schedule": {"type": "cron", "cron_expression": "0 9 * * *", "timezone": "America/Los_Angeles"}
+  },
+  "loop": {
+    "prompt": "Load and follow `braintrust/pattern-analysis`. …",
+    "agent_slug": "loop-chat",
+    "auto_approve_tools": ["new_pattern", "update_pattern"],
+    "reasoning_effort": "xhigh"
+  },
+  "actions": []
+}
 ```
 
-> **Custom facet (optional).** For a crisp `realtime_price` intent: create a facet
-> extraction fn (`function_type: "facet"`) + a topic-map classifier (`function_type:
-> "classifier"`, `function_data.type: "topic_map"`), then `POST
-> /api/project_automation/patch_id` with the **full** config (patch is a replace, not a
-> merge). Built-in facets (Task/Sentiment/Issues) are enough for a first pass.
+> To run it on demand (instead of waiting for 9am), trigger it from the project's
+> Patterns page in the UI. Patterns can also review source code if a repo is connected —
+> without one, findings show `source_review: no_source_code`.
 
 ---
 
-## Milestone 3 — Seed the project (tool OFF): smoke 10 → full 1,000
-
-Drive the (now toolless) agent over a realistic mix so the realtime-price gap is a
-visible, dense Topics cluster. **Smoke 10 first, verify, then full 1,000.** No online
-scoring yet — that comes in M6; here we just need traces + clusters.
+## Milestone 3 — Seed the project: smoke 10 → full → top-up
 
 | Status | Task | Notes |
 |---|---|---|
-| [ ] | `seed/scenarios.py` defines the use-case mix (below) | ~20% realtime-price asks (the gap) |
-| [ ] | `src/super_stonks/seed/seed.py` runs sessions through `super_stonks.agent.agent.graph` | reuse the real graph so the span tree matches prod |
-| [ ] | `make seed-smoke` → 10 traces; verify | see gate below |
-| [ ] | `make seed` → ~1,000 traces | resumable / safe to re-run |
-| [ ] | Confirm the realtime-price traces cluster in Topics | this is the §8 "aha" |
+| [x] | `seed/scenarios.py` defines the use-case mix (below) | stratified, so even a 10-trace smoke includes every bucket |
+| [x] | `seed/seed.py` runs sessions through the real `graph` | span tree matches prod; random mix per run, `--seed N` to reproduce |
+| [x] | Seeded `super-stonks` | 200 sessions so far |
+| [x] | Patterns found it | *"Stock analysis rejects dotted share-class tickers"* + *"Block analysis fails for SQ ticker requests"* |
+| [ ] | Top-up the day before the workshop | `BRAINTRUST_DEFAULT_PROJECT=super-stonks make top-up COUNT=100` |
 
-**Suggested use-case mix (tool OFF):**
+**Use-case mix:**
 
-| Use case | Share | With tool commented out |
+| Bucket | Share | Behavior |
 |---|---|---|
-| **Realtime stock price** ("what's TSLA at right now", "current AAPL price") | **~20% (the gap)** | ❌ no tool → ungrounded, fabricated/stale numbers |
-| Buy/hold/sell research ("should I buy MSFT") | ~20% | ✅ `analyze_stock_buy` still works |
-| Stock performance ("how has NVDA done this year") | ~15% | ⚠️ degraded — was `get_stock_performance` |
-| Compare two tickers | ~10% | ⚠️ degraded |
-| Retirement / account concept Qs (IRA, 401k, RMD, Roth) | ~15% | n/a (parametric, in-scope) |
-| Budgeting / debt / taxes concept Qs | ~10% | n/a (parametric) |
-| Explain an investing concept (P/E, ETFs, dividends) | ~10% | n/a (parametric) |
+| `realtime_price` — "what's TSLA at right now" | 20% | ✅ `get_stock_performance` |
+| `research` — "should I buy MSFT" | 16% | ✅ `analyze_stock_buy` |
+| `performance` — "how has NVDA done this year" | 15% | ✅ `get_stock_performance` |
+| `concept` — P/E, ETFs, dividends, IRAs, RMDs | 14% | parametric |
+| **`share_class` — BRK.B, BF.B, HEI.A, LEN.B, SQ** | **12% (the planted failure)** | ❌ tools return "No data found" |
+| `budgeting` — emergency fund, debt, capital gains | 10% | parametric |
+| `compare` — two tickers | 8% | ✅ |
+| `account_action` — "roll my 401k for me" | 5% | out of scope → should decline |
 
 **Smoke gate (after `make seed-smoke`):**
 
 ```bash
-make seed-smoke
 bt view logs --list-mode spans --json | jq '.'   # project from $BRAINTRUST_DEFAULT_PROJECT
 ```
-- [ ] traces landed · [ ] span tree `stonks-sessions → turn_n → llm` (no tool span on price asks) · [ ] Topics starts clustering
+- [ ] traces landed · [ ] span tree `stonks-sessions → turn_n → { LLM, TOOL }` · [ ] a `share_class` turn shows a TOOL span whose output is `{"error": "No data found …"}`
 
-Don't run `make seed` until the smoke gate passes. `make provision` runs M2→M3-smoke and stops here.
+Silent-failure count, for sanity (scope by date — the SQL linter requires a range):
 
-> The `SAMPLE_PROMPTS` in `src/super_stonks/app.py` seed the in-scope buckets. For the gap
-> bucket, vary tickers + phrasings so the cluster is dense but not identical.
-
----
-
-## Milestone 4 — Finalize the grounding scorer (`src/super_stonks/evals/scorers.py`)
-
-The scorer the workshop builds is already skeletoned: **`response_grounded_in_data`** —
-an LLM judge (gpt-4o, `autoevals.LLMClassifier`, `{{thread}}`, CoT, 11-level A+→F) that
-checks the response cites specific prices/percentages present in the tool data. With the
-tool off, there's nothing to ground on → low score.
-
-| Status | Task | Notes |
-|---|---|---|
-| [ ] | Finalize `response_grounded_in_data` handler | returns `{"name","score","metadata"}`; reads `output` + `trace` |
-| [ ] | Confirm it's **trace-scoped** | it needs `{{thread}}` + tool spans → register with `TraceParams`, `apply_to_root_span` |
-| [ ] | (optional) also finalize `tool_returned_data` | code scorer, trace-scoped — 0 when no tool span exists; a nice free companion signal |
-
-**Full scorer skeleton for reference** (`src/super_stonks/evals/scorers.py`; scope resolved from the trace shape):
-
-| Scorer | Type | Reads | Scope |
-|---|---|---|---|
-| `response_grounded_in_data` | **LLM judge** | `output`, `trace` | **trace** — *the workshop scorer* |
-| `tool_returned_data` | code | `output`, `trace` | trace |
-| `tool_ticker_valid` | code | `output` | span |
-| `has_citations_header` | code | `output` | span |
-| `research_verdict_sound` | LLM judge | `input`, `output` | span/row |
-| `scope_adherence` | LLM judge | `output`, `trace` | trace |
-| `conversation_quality` | LLM judge | `output`, `trace` | trace |
-
-> You only need `response_grounded_in_data` for the core arc. The rest are available if
-> you want a richer scorecard, but keep the on-screen story to the one scorer that moves.
-
----
-
-## Milestone 5 — Two experiments: prove the gap, then the fix
-
-Run the grounding scorer as **Braintrust experiments** (offline evals) — first with the
-tool off (poor), then uncomment and re-run (better). Same dataset, same scorer, changed
-agent → a clean before/after.
-
-| Status | Task | Notes |
-|---|---|---|
-| [ ] | Curate a dataset from the realtime-price Topics cluster (§9) | e.g. `init_dataset(project, "realtime-price")` |
-| [ ] | `src/super_stonks/evals/qa_eval.py` — `Eval()` wrapping `graph`, scored by `response_grounded_in_data` | `state["model"]` override available if you also want to A/B models |
-| [ ] | **Experiment 1 (tool OFF):** `bt eval src/super_stonks/evals/qa_eval.py` | grounding score is **low** — the baseline |
-| [ ] | **Uncomment `get_stock_performance`** (revert M1) | the live fix |
-| [ ] | **Experiment 2 (tool ON):** `bt eval src/super_stonks/evals/qa_eval.py` | grounding score **jumps** — compare in the UI (§15) |
-
-```python
-# src/super_stonks/evals/qa_eval.py — scaffold
-import os
-from dotenv import load_dotenv
-load_dotenv()                                          # OPENAI_API_KEY + BRAINTRUST_API_KEY from .env
-
-from braintrust import Eval, init_dataset
-from super_stonks.agent.agent import graph
-from super_stonks.evals.scorers import response_grounded_in_data   # the workshop scorer
-
-PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]     # each attendee's own project (from .env)
-
-def run(user_input: str) -> str:
-    result = graph.invoke({"messages": [{"role": "user", "content": user_input}]})
-    msgs = result["messages"]
-    return next(
-        (m["content"] for m in reversed(msgs)
-         if m.get("role") == "assistant" and m.get("content")),
-        "",
-    )
-
-Eval(
-    PROJECT,
-    data=init_dataset(PROJECT, "realtime-price"),      # curated in §9
-    task=run,
-    scores=[response_grounded_in_data],
-)
+```bash
+bt sql "SELECT count(*) AS failures, count(DISTINCT root_span_id) AS traces
+        FROM project_logs('<project id>')
+        WHERE created >= '<date>' AND span_attributes.name IN ('analyze_stock_buy','get_stock_performance')
+          AND output LIKE '%No data found%'" --json | jq '.data'
 ```
 
-> **Import order matters:** `agent.py` and `src/super_stonks/evals/scorers.py` both build their OpenAI
-> clients at *import* time, so `load_dotenv()` must run **before** those imports (as
-> above) or `bt eval` won't have `OPENAI_API_KEY` / `BRAINTRUST_API_KEY`.
+> Emergent findings are a bonus, not a bug: on the first run Patterns also surfaced the
+> agent misreading the 52-week range position and quoting an outdated RMD penalty.
 
-> Run 1 and Run 2 land as two experiments in the same project → the §15 comparison view
-> shows the grounding-score delta driven purely by uncommenting the tool.
+---
+
+## Milestone 4 — The scorer (`src/super_stonks/evals/scorers.py`)
+
+**`tool_call_succeeded`** — a code scorer: did each tool call return data rather than an
+`{"error": …}` payload? The check lives in `evals/tool_checks.py` (stdlib only) and is
+shared by both paths:
+
+- **Offline** (`scorers.tool_call_succeeded`, in `qa_eval.py`): trace-scoped — score =
+  share of the trace's tool calls that succeeded; skipped when no tool fired.
+- **Online** (`push_assets.py` → `make push-scorer`): a pushed Python code scorer run on
+  **every tool span** (input = tool args, output = tool result) → 1 or 0.
+
+`response_grounded_in_data` (LLM judge) stays as a secondary offline score.
+
+| Status | Task | Notes |
+|---|---|---|
+| [x] | `tool_call_succeeded` offline + online | verified: pushed scorer returns 0 for `{"error": …}`, 1 for data |
+
+| Scorer | Type | Scope |
+|---|---|---|
+| `tool_call_succeeded` | **code** | trace offline / tool span online — *the workshop scorer* |
+| `response_grounded_in_data` | LLM judge | row |
+| `tool_ticker_valid` | code | span |
+| `has_citations_header` | code | span |
+| `research_verdict_sound` | LLM judge | span/row |
+| `scope_adherence` | LLM judge | trace |
+| `conversation_quality` | LLM judge | trace |
+
+---
+
+## Milestone 5 — Two experiments: prove the failure, then the fix
+
+| Status | Task | Notes |
+|---|---|---|
+| [x] | `make curate-dataset` → dataset from the Pattern's evidence (step 7) | `provision/curate_dataset.py`: reads the Pattern from `project_patterns()`, runs its `affected_filter` over the logs, writes one row per failing turn with `bt datasets create`/`update`. Default `PATTERN=share-class`, `DATASET=share-class-tickers`; refuses to write into `super-stonks` |
+| [x] | `evals/qa_eval.py` — `Eval()` wrapping `graph` | scores `tool_call_succeeded` + `response_grounded_in_data`; dataset via `EVAL_DATASET` (default `share-class-tickers`) |
+| [ ] | **Experiment 1 (as typed):** `bt eval src/super_stonks/evals/qa_eval.py` | low — the baseline |
+| [ ] | **Fix:** normalize tickers in `agent.py::_invoke_tool` | `.` → `-`, plus `{"SQ": "XYZ"}` |
+| [ ] | **Experiment 2:** re-run | score **jumps** — compare in the UI (step 11) |
+
+> **`bt sql` gotchas** (hit while building `curate_dataset.py`): it returns **10 rows**
+> unless you add a `LIMIT`; queries selecting `input`/`output` must use `LIMIT 100` or
+> less; and filtering on `span_id` requires a `root_span_id` filter too.
 
 ---
 
 ## Milestone 6 — Promote the scorer to an online score
 
-Push the scorer, then attach it as an **online automation** so it scores live
-production traffic — and watch the improved (tool-on) agent score better on new traffic.
-
-> **Only the grounded scorer is ever pushed.** No scorers are pushed during
-> provisioning — attendees' fresh projects stay clean, and the single online score is
-> the one the story is about. It's pushed as an **LLM-judge prompt scorer**
-> (`push_assets.py` → `project.scorers.create(messages=…, model=…, choice_scores=…)`),
-> sharing `judge_prompts.GROUNDED_PROMPT` with the offline `LLMClassifier` in
-> `scorers.py` — same rubric online and offline.
-
-**⚠️ The online automation is NOT a `bt` command** (see the CLI callout above). Push is
-CLI; the automation is API (scriptable) or UI.
-
 | Status | Task | Notes |
 |---|---|---|
-| [ ] | `bt functions push` the grounding scorer → `make push-scorer` | registers it as a project function; resolve its function ID |
-| [ ] | Create the online automation via API → `make automations` | `src/super_stonks/provision/configure.py`: `PUT /v1/project_score`, `score_type:"online"` (no CLI equivalent) |
-| [ ] | **`make automations` sets the scope automatically** | derive trace-vs-span from the scorer (M4) and set the online config accordingly — see below |
-| [ ] | *(or)* add it in the UI | Project → Configuration → Online scoring → add rule |
-| [ ] | Generate fresh traffic (Streamlit or `python -m super_stonks.agent`) | agent now has the tool back |
-| [ ] | Confirm the online score attaches and is **higher** than the baseline traces | §17 "validate new coverage" |
-
-**Scope is not hardcoded — `configure.py` derives it from the scorer.** Each scorer
-declares its scope via its param model in `src/super_stonks/evals/scorers.py` (`TraceParams` → trace,
-`SpanParams` → span). `make automations` reads that and writes the matching
-`config.online`:
-
-- **trace-scoped** (e.g. `response_grounded_in_data`) → `apply_to_root_span: True`
-  (score the root `stonks-sessions`/`turn` span, with the full thread + tool spans).
-- **span-scoped** (e.g. `tool_ticker_valid`) → `apply_to_root_span: False` + a
-  `btql_filter` that targets the specific span (e.g. `span_attributes.name ilike 'turn_%'`).
-
-```python
-# src/super_stonks/provision/configure.py — the step bt CAN'T do; see reference configure.ts
-# PROJECT_ID resolved from the env project: GET /v1/project?project_name=$BRAINTRUST_DEFAULT_PROJECT
-# One source of truth: map each scorer to its scope, then build the config.
-SCOPES = {"response_grounded_in_data": "trace", "tool_ticker_valid": "span"}  # from scorers.py param models
-
-def online_config(fn_id: str, slug: str) -> dict:
-    trace_scoped = SCOPES[slug] == "trace"
-    online = {
-        "sampling_rate": 1.0,                              # generous for the demo
-        "scorers": [{"type": "function", "id": fn_id}],
-        "apply_to_root_span": trace_scoped,               # ← scope-driven, not hardcoded
-    }
-    if not trace_scoped:
-        online["btql_filter"] = "span_attributes.name ilike 'turn_%'"  # target the span
-    return {"online": online}
-
-PUT /v1/project_score
-{
-  "project_id": PROJECT_ID,
-  "name": "grounded-in-tool-data",
-  "score_type": "online",
-  "config": online_config(GROUNDED_FN_ID, "grounded-in-tool-data"),   # → apply_to_root_span=True
-}
-```
-
-```bash
-make push-scorer     # bt functions push  → function ID
-make automations     # API call → online score live
-# then drive new traffic and watch the score in bt view logs / the UI
-```
+| [x] | `make push-scorer` | `bt functions push` of a Python code scorer — runs from `src/` so the bundled module path is `super_stonks.evals.push_assets` |
+| [x] | `make automations` | `provision/configure.py`: `PUT /v1/project_score`, `score_type: "online"`, `btql_filter: span_attributes.type = 'tool'` |
+| [ ] | Generate fresh traffic (Streamlit "Should I buy BRK.B right now?" starter) | |
+| [ ] | Confirm the online score attaches and is higher after the fix | step 13 |
 
 ---
 
 ## Day-of checklist
 
 ```bash
-# --- pre-work (tool commented out) ---
-make setup                 # uv sync + .env
-make provision             # topics + 10-trace smoke  ← STOP & verify
-make seed                  # ~1,000 traces, tool OFF (the gap is now in the data)
+# --- pre-work (presenter, against the shared project) ---
+set -a; source .env; set +a
+export BRAINTRUST_DEFAULT_PROJECT=super-stonks
+make setup
+make provision             # topics + patterns + 10-trace smoke  ← STOP & verify
+make seed                  # COUNT traces (default 500)
+make top-up COUNT=100      # the day before — keeps the Patterns active
 
 # --- live arc ---
-# §8  observe Topics → realtime-price cluster
-# §9  curate that cluster into a dataset
-bt eval src/super_stonks/evals/qa_eval.py   # Experiment 1 (tool OFF) → low grounding score
-#     uncomment get_stock_performance
-bt eval src/super_stonks/evals/qa_eval.py   # Experiment 2 (tool ON)  → grounding score jumps (§15)
-make push-scorer           # bt functions push the scorer
-make automations           # API → online score (NOT a bt command)
-# §17 drive new traffic → online grounding score confirms the improvement
+# step 5  Patterns → "Stock analysis rejects dotted share-class tickers"
+# step 6  investigate with the coding agent (Braintrust MCP + bt)
+make curate-dataset        # step 7: the Pattern's evidence → dataset (own project)
+bt eval src/super_stonks/evals/qa_eval.py   # Experiment 1 → low
+#      normalize tickers in agent.py::_invoke_tool
+bt eval src/super_stonks/evals/qa_eval.py   # Experiment 2 → higher (step 11)
+make push-scorer
+make automations
+# step 13  drive new traffic → online score confirms the improvement
 ```
-
-Reference for Topics + online-automation API calls (the non-CLI bits):
-`/Users/spencerseale/bt-repos/bt-cost-optimizer-demo/phase/complete/configure.ts`.

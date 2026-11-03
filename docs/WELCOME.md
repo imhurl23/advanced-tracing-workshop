@@ -25,3 +25,9 @@ Verify install
 ```bash
 uv --version
 ```
+
+### 3. Clone the workshop repo
+
+```bash
+git clone git@github.com:imhurl23/advanced-tracing-workshop.git && cd advanced-tracing-workshop
+```

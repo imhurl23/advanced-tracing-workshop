@@ -6,12 +6,12 @@ this file (`@AGENTS.md`). Put all guidance here.
 
 ## What this is
 
-A Braintrust workshop that walks the full loop — observe traces → cluster with Topics →
+A Braintrust workshop that walks the full loop — observe traces → find the failure with Patterns →
 build a scorer → run experiments → deploy an online score. The subject is **Super
 Stonks**, a small LangGraph stock-chat agent instrumented with the Braintrust SDK.
 
-- **Docs:** `docs/PARTICIPANT.md` (the follow-along guide attendees run), `docs/WORKSHOP.md`
-  (presenter run-of-show), `docs/SEEDING_MILESTONES.md` (build plan / trace shape / scorer +
+- **Docs:** `docs/PARTICIPANT.md` (the follow-along guide attendees run — also the
+  presenter's run-of-show), `docs/SEEDING_MILESTONES.md` (build plan / trace shape / scorer +
   seeding design), `docs/WELCOME.md` (attendee install screen).
 
 ## ⚠️ The workshop objective — dotted share-class tickers
@@ -38,8 +38,9 @@ change `analyze_stock_buy`.
 src/super_stonks/
   app.py            # Streamlit UI  → `make agent`
   agent/            # LangGraph agent: agent.py, tools.py, prompts.py, config.py, state.py, __main__.py
-  evals/            # scorers.py (skeleton) + qa_eval.py (planned)
-  provision/, seed/ # planned (Topics/automations, seeding) — see docs/SEEDING_MILESTONES.md
+  evals/            # scorers.py, judge_prompts.py, push_assets.py, qa_eval.py
+  provision/        # patterns.py (Patterns automation), configure.py (online score), dataset copy/curate
+  seed/             # scenarios.py (question mix, incl. share-class tickers) + seed.py — see docs/SEEDING_MILESTONES.md
 ```
 
 Imports are `super_stonks.*` (installed editable by `uv sync`, so no `PYTHONPATH`).
@@ -54,13 +55,13 @@ make help             # all targets
 
 ## Read the shared seed, write your own project
 
-**Topics clustering + cluster investigation** read the **shared `super-stonks` project**
+**Patterns, Topics clustering, and their investigation** read the **shared `super-stonks` project**
 (`--project super-stonks`, or `project_logs('<super-stonks project id>')`) — it's
-pre-seeded with thousands of traces; a user's own project only has the handful they
+pre-seeded with a few hundred traces and has Topics + Patterns enabled; a user's own project only has the handful they
 generate locally, not enough to cluster. Everything a user **generates or writes** goes
 to their own `BRAINTRUST_DEFAULT_PROJECT`: local app/CLI traces (they view those with
 plain `bt view logs`), plus the curated dataset, experiments, and online score. So:
-Topics/clusters ⇒ `super-stonks`; my own traces + dataset + evals ⇒ the user's project.
+Patterns/Topics ⇒ `super-stonks`; my own traces + dataset + evals ⇒ the user's project.
 
 ## Investigating a Topics cluster (by name)
 
@@ -142,7 +143,7 @@ Example row (first row of the `current-price-gap-offline` dataset in the user's 
 Then:
 
 ```
-BRAINTRUST_PROFILE=workshop-advanced-tracing bt datasets create <name> \
+bt datasets create <name> \
   --description "..." --file rows.jsonl -p "$BRAINTRUST_DEFAULT_PROJECT"
 ```
 
@@ -162,15 +163,14 @@ Use `bt datasets update/add <name> --file …` to upsert more rows, and
   **one** key, `BRAINTRUST_API_KEY`, and fill in their name for `BRAINTRUST_DEFAULT_PROJECT`.
   OpenAI traffic goes through the Braintrust AI gateway (`OPENAI_BASE_URL=https://gateway.braintrust.dev`,
   `OPENAI_API_KEY="${BRAINTRUST_API_KEY}"`), which uses the org's configured OpenAI key. No
-  separate OpenAI key is distributed. `.env` also holds `BRAINTRUST_PROFILE`,
-  `BRAINTRUST_ORG_NAME`, and `BRAINTRUST_DEFAULT_PROJECT`; users load it once per terminal
-  with `set -a; source .env; set +a` (see `docs/WORKSHOP.md §4.2`). The `bt` CLI and the
+  separate OpenAI key is distributed. `.env` also holds
+  `BRAINTRUST_ORG_NAME` and `BRAINTRUST_DEFAULT_PROJECT`; users load it once per terminal
+  with `set -a; source .env; set +a` (see `docs/PARTICIPANT.md` step 2). The `bt` CLI and the
   Python code both read the project from `BRAINTRUST_DEFAULT_PROJECT`. The agent's OpenAI
   client (`agent/agent.py`) always reads its key + base URL directly from `.env`.
 - **`bt` CLI auth:** `bt` authenticates with whatever is in the shell once `.env` is
-  sourced — the `BRAINTRUST_PROFILE` saved by `bt login`, or the exported
-  `BRAINTRUST_API_KEY` (same workshop key either way). `BRAINTRUST_ORG_NAME` pins the org so
-  it never falls back to a different org from the user's global bt config. `bt` doesn't
+  sourced — the exported `BRAINTRUST_API_KEY` (no `bt login` or profile needed).
+  `BRAINTRUST_ORG_NAME` pins the org. `bt` doesn't
   read `.env` itself — source it; don't add `--env-file` to `bt` commands.
 - **Package management:** uv. Add deps to `pyproject.toml`; run via `uv run`.
 - **Env in bash (coding agents):** a human sources `.env` once per terminal

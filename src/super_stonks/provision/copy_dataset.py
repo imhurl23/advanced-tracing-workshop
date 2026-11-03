@@ -1,7 +1,7 @@
 """Copy a dataset from the primary project to every other project in the org.
 
 Projects are enumerated with the **bt CLI** (`bt projects list --json`, authenticated
-via the profile — no API key needed). The rows are copied with the **Braintrust Python
+with the exported `BRAINTRUST_API_KEY`). The rows are copied with the **Braintrust Python
 SDK** (`init_dataset`), which reads `BRAINTRUST_API_KEY` from `.env`.
 
 The `bt` CLI has no cross-project dataset copy, so the row copy is done via the SDK.
@@ -19,7 +19,7 @@ import sys
 
 from dotenv import load_dotenv
 
-load_dotenv()  # BRAINTRUST_API_KEY for the SDK; bt uses the profile, not this
+load_dotenv()  # BRAINTRUST_API_KEY for the SDK; bt reads it from the sourced shell
 
 from braintrust import init_dataset
 

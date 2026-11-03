@@ -3,7 +3,7 @@
 #
 # Prereqs (install from WELCOME.md before running any target): uv, bt.
 # Auth/config: fill .env (Braintrust API key + your project), then load it into your
-# shell: set -a; source .env; set +a  (see WORKSHOP.md §4.2).
+# shell: set -a; source .env; set +a  (see docs/PARTICIPANT.md step 2).
 # See SEEDING_MILESTONES.md for the full build plan.
 # =============================================================================
 
@@ -20,10 +20,10 @@ ERR  := \033[31m
 END  := \033[0m
 
 # Every target that talks to Braintrust needs a project. It comes from .env, loaded
-# into the shell (WORKSHOP.md §4.2), which both bt and the Python code read.
+# into the shell (docs/PARTICIPANT.md step 2), which both bt and the Python code read.
 PROJECT_GUARD = @test -n "$${BRAINTRUST_DEFAULT_PROJECT:-}" || { printf "$(ERR)BRAINTRUST_DEFAULT_PROJECT is not set.$(END) Fill it in .env, then run: set -a; source .env; set +a\n"; exit 1; }
 
-# Full-seed size (override: `make seed COUNT=500`).
+# Full-seed size (override: `make seed COUNT=200`).
 COUNT ?= 500
 
 # Guard for targets whose script isn't written yet — points at the milestone.
@@ -38,23 +38,26 @@ help:
 	@printf "$(BOLD)advanced-tracing-workshop$(END) — make targets\n"
 	@echo ""
 	@printf "$(BOLD)Hero$(END)\n"
-	@echo "  make prepare       ONE-SHOT: enable Topics → smoke seed → full seed (prepare a project)"
+	@echo "  make prepare       ONE-SHOT: create project → Topics + Patterns → smoke seed → full seed (prepare a project)"
 	@echo ""
 	@printf "$(BOLD)Setup$(END)\n"
 	@echo "  make setup         uv sync + create .env (checks uv/bt are installed)"
-	@echo "  make agent         run the agent's Streamlit app (live demo — §5.1)"
+	@echo "  make agent         run the agent's Streamlit app (live demo — PARTICIPANT step 3)"
 	@echo ""
-	@printf "$(BOLD)Provision (pre-work, tool commented out)$(END)\n"
-	@echo "  make topics        enable Topics on your project (M2)"
-	@echo "  make seed-smoke    enable Topics (upstream) + seed 10 traces, then verify (M2→M3)"
-	@echo "  make seed          seed COUNT traces (default 500; runs seed-smoke first) (M3)"
-	@echo "  make provision     alias for seed-smoke — the topics + smoke verify gate"
+	@printf "$(BOLD)Provision (pre-work)$(END)\n"
+	@echo "  make project       create the project if it doesn't exist"
+	@echo "  make patterns      enable the Patterns automation on your project (daily 9am PT)"
+	@echo "  make seed-smoke    enable Topics + Patterns (upstream) + seed 10 traces, then verify"
+	@echo "  make seed          seed COUNT traces (default 500; runs seed-smoke first)"
+	@echo "  make top-up        seed COUNT more traces only (keeps Patterns active before the workshop)"
+	@echo "  make provision     alias for seed-smoke — the topics + patterns + smoke verify gate"
+	@echo "  make topics        enable Topics on your project (clustering; not the key finding)"
 	@echo "  make copy-dataset DATASET=<name>   copy a super-stonks dataset to all other org projects"
 	@echo ""
 	@printf "$(BOLD)Workshop (your own project)$(END)\n"
-	@echo "  make curate-dataset  pull the gap cluster from super-stonks into a dataset in your project"
-	@echo "  make push-scorer     push the grounded scorer online (prompt scorer)"
-	@echo "  make automations     turn on the online automation for it (via API)"
+	@echo "  make curate-dataset  turn a super-stonks Pattern's evidence into a dataset in your project"
+	@echo "  make push-scorer     push the tool-success scorer (code scorer)"
+	@echo "  make automations     score every tool span online with it (via API)"
 	@echo "  (experiments run via: bt eval src/super_stonks/evals/qa_eval.py)"
 	@echo ""
 
@@ -79,41 +82,68 @@ agent:
 # -----------------------------------------------------------------------------
 # Provision
 # -----------------------------------------------------------------------------
+# Create the project if it doesn't exist yet (first step of the seed chain).
+.PHONY: project
+project:
+	$(PROJECT_GUARD)
+	@if bt projects list --json | grep -q "\"name\":\"$$BRAINTRUST_DEFAULT_PROJECT\""; then \
+		printf "$(DIM)Project $$BRAINTRUST_DEFAULT_PROJECT already exists.$(END)\n"; \
+	else \
+		bt projects create "$$BRAINTRUST_DEFAULT_PROJECT" && printf "$(OK)Created project $$BRAINTRUST_DEFAULT_PROJECT.$(END)\n"; \
+	fi
+
+.PHONY: patterns
+patterns: project
+	$(PROJECT_GUARD)
+	uv run python -m super_stonks.provision.patterns
+
+# Topics still runs during seeding for clustering; Patterns carries the key finding.
 .PHONY: topics
-topics:
+topics: project
 	$(PROJECT_GUARD)
 	@printf "$(DIM)Enabling Topics on $$BRAINTRUST_DEFAULT_PROJECT …$(END)\n"
 	-bt topics config enable --name "Workshop Topics" --topic-window 1d --generation-cadence 1h --no-input
 
-# Topics is upstream of any seeding, so seed-smoke depends on it; the full seed
-# depends on seed-smoke. Running `make seed` therefore does: topics → 10 smoke → 1,000.
+# Topics + Patterns are upstream of any seeding, so seed-smoke depends on both; the full
+# seed depends on seed-smoke. `make seed` therefore does: project → topics + patterns →
+# 10 smoke → COUNT.
+# Each run draws a fresh random mix of questions (pass SEED=N to reproduce one).
+SEED_ARGS = $(if $(SEED),--seed $(SEED),)
+
 .PHONY: seed-smoke
-seed-smoke: topics
+seed-smoke: topics patterns
 	$(PROJECT_GUARD)
 	$(call require_script,src/super_stonks/seed/seed.py,M3)
-	uv run python -m super_stonks.seed.seed --count 10
-	@printf "$(OK)10 smoke traces sent.$(END) Verify: bt view logs --list-mode spans (Topics clustering), then 'make seed'.\n"
+	uv run python -m super_stonks.seed.seed --count 10 $(SEED_ARGS)
+	@printf "$(OK)10 smoke traces sent.$(END) Verify: bt view logs --list-mode spans, then 'make seed'.\n"
 
 .PHONY: seed
 seed: seed-smoke
 	$(PROJECT_GUARD)
 	$(call require_script,src/super_stonks/seed/seed.py,M3)
-	uv run python -m super_stonks.seed.seed --count $(COUNT)
+	uv run python -m super_stonks.seed.seed --count $(COUNT) $(SEED_ARGS)
 
-# Provision = the topics + smoke verify gate (alias for seed-smoke).
+# Top-up = more traffic only (no Topics/Patterns/smoke step). Patterns needs matching traces in
+# the last two weekdays to keep a pattern active, so run this shortly before the workshop.
+.PHONY: top-up
+top-up:
+	$(PROJECT_GUARD)
+	uv run python -m super_stonks.seed.seed --count $(COUNT) $(SEED_ARGS)
+
+# Provision = the topics + patterns + smoke verify gate (alias for seed-smoke).
 .PHONY: provision
 provision: seed-smoke
-	@printf "$(OK)Provisioned:$(END) Topics enabled + 10 smoke traces. Verify the gate, then run 'make seed'.\n"
+	@printf "$(OK)Provisioned:$(END) Topics + Patterns enabled + 10 smoke traces. Verify the gate, then run 'make seed'.\n"
 
 # Hero one-shot: prepare a project end to end. The dependency chain runs
-# topics → seed-smoke (10) → seed (1,000); this target just adds the headline.
-# Prereqs: `make setup` + the WORKSHOP.md §4.2 exports (profile + project) done first.
+# topics + patterns → seed-smoke (10) → seed (COUNT); this target just adds the headline.
+# Prereqs: `make setup` + `.env` sourced (PARTICIPANT step 2) (API key + project) first.
 .PHONY: prepare
 prepare: seed
-	@printf "$(OK)✔ Project prepared$(END) on $$BRAINTRUST_DEFAULT_PROJECT: Topics enabled, smoke + full traces seeded (tool gap in place).\n"
+	@printf "$(OK)✔ Project prepared$(END) on $$BRAINTRUST_DEFAULT_PROJECT: Topics + Patterns enabled, smoke + full traces seeded (share-class tickers planted).\n"
 
 # Copy a dataset from the primary project (super-stonks) to every other org project.
-# bt enumerates projects (profile auth); the SDK copies the rows.
+# bt enumerates projects (API-key auth); the SDK copies the rows.
 .PHONY: copy-dataset
 copy-dataset:
 	@test -n "$(DATASET)" || { printf "$(ERR)Usage: make copy-dataset DATASET=<name>$(END)\n"; exit 1; }
@@ -122,13 +152,12 @@ copy-dataset:
 # -----------------------------------------------------------------------------
 # Online scoring
 # -----------------------------------------------------------------------------
-# Push the grounded scorer online (the reveal). Prompt scorer = no code bundling,
-# so no --requirements; --runner points bt at the venv python so the
-# definition-collection import (braintrust) resolves.
+# Push the tool-success scorer (a Python code scorer). Runs from src/ so the bundled
+# module path is `super_stonks.evals.push_assets`; --runner points bt at the venv python.
 .PHONY: push-scorer
 push-scorer:
 	$(PROJECT_GUARD)
-	bt functions push --file src/super_stonks/evals/push_assets.py \
+	cd src && bt functions push --file super_stonks/evals/push_assets.py \
 		--language python --runner "$(CURDIR)/.venv/bin/python" \
 		--if-exists replace -p "$$BRAINTRUST_DEFAULT_PROJECT" --yes
 

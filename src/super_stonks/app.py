@@ -19,6 +19,7 @@ SAMPLE_PROMPTS = [
     "Should I buy, hold, or sell MSFT right now?",
     "Compare the recent performance of AAPL and GOOGL.",
     "What are the key risks for TSLA investors?",
+    "Should I buy BRK.B right now?",
 ]
 
 

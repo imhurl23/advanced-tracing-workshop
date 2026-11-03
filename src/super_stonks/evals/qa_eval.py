@@ -1,17 +1,20 @@
 """Offline experiment for the workshop — run with `bt eval`.
 
-Runs the agent over the dataset curated from the share-class ticker pattern (in YOUR
-project) and scores each answer with the grounding judge. Run it twice to get the
-before/after:
+Runs the agent over the dataset curated from the share-class ticker Pattern (in YOUR
+project, `make curate-dataset`) and scores each run with:
 
-  1. tickers passed through as typed (BRK.B) -> baseline experiment (tools return
-     "No data found", low grounding)
-  2. normalize tickers in agent.py::_invoke_tool (BRK.B -> BRK-B) -> re-run -> grounding jumps
+  - tool_call_succeeded — share of tool calls that returned data, not `{"error": …}`
+  - response_grounded_in_data — LLM judge: the answer cites real figures
+
+Run it twice to get the before/after:
+
+  1. tickers passed through as typed (BRK.B) -> baseline (tools return "No data found")
+  2. normalize tickers in agent.py::_invoke_tool (BRK.B -> BRK-B) -> re-run -> scores jump
 
     bt eval src/super_stonks/evals/qa_eval.py
 
-Dataset name defaults to "realtime-price" (created in §9 / `make curate-dataset`);
-override with EVAL_DATASET. Project comes from BRAINTRUST_DEFAULT_PROJECT (your project).
+Dataset name defaults to "share-class-tickers"; override with EVAL_DATASET. Project comes
+from BRAINTRUST_DEFAULT_PROJECT (your project).
 """
 
 import os
@@ -23,10 +26,10 @@ load_dotenv()  # OPENAI_API_KEY + BRAINTRUST_API_KEY (before importing the agent
 from braintrust import Eval, init_dataset
 
 from super_stonks.agent.agent import graph
-from super_stonks.evals.scorers import response_grounded_in_data
+from super_stonks.evals.scorers import response_grounded_in_data, tool_call_succeeded
 
 PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]
-DATASET = os.environ.get("EVAL_DATASET", "realtime-price")
+DATASET = os.environ.get("EVAL_DATASET", "share-class-tickers")
 
 
 def run(user_input) -> str:
@@ -51,5 +54,5 @@ Eval(
     PROJECT,
     data=init_dataset(PROJECT, DATASET),
     task=run,
-    scores=[response_grounded_in_data],
+    scores=[tool_call_succeeded, response_grounded_in_data],
 )
