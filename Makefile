@@ -66,11 +66,11 @@ help:
 # -----------------------------------------------------------------------------
 .PHONY: setup
 setup:
-	@command -v uv >/dev/null 2>&1 || { printf "$(ERR)uv not found.$(END) Install: curl -LsSf https://astral.sh/uv/install.sh | sh\n"; exit 1; }
-	@command -v bt >/dev/null 2>&1 || printf "$(WARN)bt not found — install: curl -fsSL https://bt.dev/cli/install.sh | bash$(END)\n"
+	@command -v uv >/dev/null 2>&1 || { echo "uv not found. Install: curl -LsSf https://astral.sh/uv/install.sh | sh"; exit 1; }
+	@command -v bt >/dev/null 2>&1 || { echo "bt not found. Install: curl -fsSL https://bt.dev/cli/install.sh | bash"; exit 1; }
+	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env. Fill in BRAINTRUST_API_KEY and BRAINTRUST_DEFAULT_PROJECT."; else echo ".env already exists; keeping your values. Check the defaults in docs/PARTICIPANT.md step 2."; fi
 	uv sync
-	@if [ ! -f .env ]; then cp .env.example .env && printf "$(OK)Created .env — fill in BRAINTRUST_API_KEY + BRAINTRUST_DEFAULT_PROJECT.$(END)\n"; else printf "$(DIM).env already exists — leaving it.$(END)\n"; fi
-	@printf "$(OK)Setup complete.$(END) Next: fill .env, then run: set -a; source .env; set +a\n"
+	@echo "Setup complete. Fill .env, then run: set -a; source .env; set +a"
 
 # -----------------------------------------------------------------------------
 # Live demo

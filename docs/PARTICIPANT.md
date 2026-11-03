@@ -1,30 +1,36 @@
 # Super Stonks — Participant Guide
 
-Follow top to bottom. You **read** the shared, pre-seeded `super-stonks` project; you
-**write** (dataset, experiments, online score) to **your own** project.
+Follow top to bottom. Participants use **`bt` in the terminal** to inspect Braintrust;
+no Braintrust UI account is needed. Your coding agent uses `bt` too. Topics and Patterns
+screens are instructor demos. The stock-chat app opens locally in your browser.
 
-> **Using Codex as your coding agent?** You don't need an OpenAI account — Codex can run
-> on the Braintrust API key in your `.env` via the Braintrust AI gateway. After step 2
-> (once `.env` is filled in), follow [`CODEX.md`](CODEX.md) to set it up.
+Read the pre-seeded **`super-stonks`** project. Write your traces, dataset, experiments,
+and online score to **your own project**. Do not run the seeding commands.
 
 ## 1. Install
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh          # uv
-curl -fsSL https://bt.dev/cli/install.sh | bash          # bt
-bt --version                                             # verify installation and version >= 0.27.2
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://bt.dev/cli/install.sh | bash
+```
+
+Open a new terminal, then check both tools. Use `bt` 0.28.1 or newer.
+
+```bash
+uv --version
+bt --version
 ```
 
 ## 2. Configure
 
-Clone the workshop repository and set up the environment:
-
 ```bash
-git clone git@github.com:imhurl23/advanced-tracing-workshop.git && cd advanced-tracing-workshop
-make setup  # uv sync + creates .env
+git clone https://github.com/imhurl23/advanced-tracing-workshop.git
+cd advanced-tracing-workshop
+make setup
 ```
 
-Open `.env` and fill in the values for `$BRAINTRUST_API_KEY` and `$BRAINTRUST_DEFAULT_PROJECT`:
+`make setup` creates `.env` with these defaults. Existing `.env` files are kept.
+Open it and replace only the API key and `<your-name>`:
 
 ```bash
 # .env
@@ -36,196 +42,152 @@ BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
 BRAINTRUST_ORG_NAME="dataoutpost-workshop"
 ```
 
-Load it into your shell so `bt`, `make`, and your coding agent all pick it up:
+Load it in **every new terminal**, before starting your coding agent:
+
 ```bash
 set -a; source .env; set +a
 ```
 
-> **Note:** this lasts for the current terminal only. Re-run it in every new terminal,
-> and **before** starting your coding agent (Claude Code, Codex, Cursor) — they only see
-> what was exported in the shell they were launched from.
+Only one API key is needed. If using Codex through the Braintrust gateway, follow
+[`CODEX.md`](CODEX.md). MCP setup is optional; the prompts below use `bt`.
 
-With `.env` loaded, connect your coding agent to the Braintrust MCP server — follow
-[`MCP.md`](MCP.md) for Claude Code, Codex, or Cursor.
+## 3. Run the agent and view your trace
 
-
-<!-- Next, set up the Braintrust skills so coding agents know exactly how to interact with `bt`. Select `local` as the scope, press "Enter" to accept the default workflow docs, and choose the coding agent of your choice. We will be using Claude in this workshop, but all should work the same way.
-```bash
-bt setup skills 
-``` -->
-
-
-## 3. Run the agent, see your trace
-
-This repository contains a simple agent you'll use throughout to generate traces and interact with. Use the `make` command to launch it. It will open in your browser.
-
-> **Note:** make sure `.env` is filled in and loaded (`set -a; source .env; set +a`) in this terminal, otherwise you will run into issues.
 ```bash
 make agent
 ```
-Once the Streamlit app opens and loads, ask a question in the chat input or select a "Starting point" from the left. When you've done some interacting, interrupt the app with `Ctrl + c`.
 
-With some interactions logged, use the following to view your traces in the console.
+In the local app, ask: **“Should I buy, hold, or sell MSFT right now?”**
+Stop the app with **Ctrl+C** in the terminal, then inspect the trace:
+
 ```bash
 bt view logs
 ```
+
+Compare the question, tool calls, and reply. A completed trace does not guarantee a
+correct answer.
 
 ## 4. Explore Topics on the shared seed
 
-> **Note:** participants do not have access to the Braintrust UI, so this is instructor led.
-```bash
-bt topics open --project super-stonks
-```
-
-Topics groups the shared project's traces by **what users are asking for** — stock
-research, price checks, retirement questions, and so on. It's a great map of the traffic,
-but notice what it doesn't tell you: whether the agent actually *answered* any of it. The
-"stock research" cluster looks perfectly healthy here.
+Watch the instructor open Topics for `super-stonks`. Topics groups traces by what users
+ask for, such as stock research or price checks. It does not tell us whether answers
+are correct.
 
 ## 5. Find the problem with Patterns
 
-> **Note:** instructor led.
+Watch the instructor open Patterns for `super-stonks`. Patterns finds recurring
+problems and links to examples, including failures with no span error.
 
-Patterns runs on a schedule, reads the recent traces, and records **recurring problems**
-with evidence, frequency, and a suggested fix — including failures that never raise an
-error. Open the Patterns page for `super-stonks`:
+Find the pattern about dotted share-class tickers.
+
+## 6. Investigate with your coding agent
+
+Start your coding agent from this terminal, in this repository. Ask:
 
 ```text
-https://www.braintrust.dev/app/dataoutpost-workshop/p/super-stonks/patterns
+Use the bt CLI to find the pattern about dotted share-class tickers in 'super-stonks'. Pull a representative sample of its traces. Compare the user's question, the ticker passed to each tool, and the tool's output. What is the root cause? Do not change code yet.
 ```
 
-Target the dotted share-class ticker pattern, currently titled
-**"Dotted tickers fail or change share classes"**. Its stable ID is
-`b2c6500a-00ec-480f-a5ce-ed9456b6bd76`. Patterns generates and updates titles, so the
-wording may change; the ID identifies the workshop record.
+Discuss the evidence before continuing. A tool can return `{"error": "No data found..."}`
+without raising an exception. Patterns connects those failures across requests.
 
-## 6. Investigate it with your coding agent
+## 7. Create your dataset
 
-Ask your coding agent:
-```text
-Use the Braintrust MCP server to find pattern ID b2c6500a-00ec-480f-a5ce-ed9456b6bd76 in 'super-stonks' (currently titled "Dotted tickers fail or change share classes"). Pull a representative sample of its traces and compare what the user asked, which ticker the agent passed to its tools, and what the tools returned. What's the root cause?
-```
-Accept the dialogs while observing what your agent does to answer the question.
+Exit your coding agent. Collect the pattern's failing turns into your own project:
 
-It should find it: users type class shares with a dot (`BRK.B`), but Yahoo Finance only
-knows the dash form (`BRK-B`). The tool returns "No data found" as a normal result — no
-error on the span — so the agent guesses another symbol or tells the user the ticker is
-wrong.
-
-## 7. Curate the pattern's evidence into your dataset
-
-The pattern records exactly which spans are affected. Turn that evidence into a dataset in
-your own project — one row per failing turn, with the user's question as the input and the
-broken reply and failing tool call in the metadata:
 ```bash
 make curate-dataset
-```
-
-The command selects the shared pattern by its stable ID, so title changes do not
-affect this step. Keep the default dataset name `share-class-tickers`; step 9 uses it
-automatically. Instructors replacing the seed pattern can set `PATTERN_ID` to the new
-record ID. `PATTERN` also supports an explicit, unique name substring; `PATTERN_ID`
-takes precedence when both are set.
-
-View it with:
-```bash
 bt datasets view share-class-tickers
 ```
 
-## 8. Select a scorer
+Each row contains the question, broken reply, failing tool call, and source trace.
 
-Evals require at least one scorer. We've already defined it in the code:
-`tool_call_succeeded` checks that **each time a tool fires, it returns data** rather than
-an `{"error": ...}` payload. The eval runs it locally; you'll push it to Braintrust in
-step 12 for online scoring.
+## 8. Understand the scorer
 
-## 9. Baseline experiment
+**Nothing to select or configure.** The eval already uses `tool_call_succeeded` from
+`src/super_stonks/evals/scorers.py`. It measures the fraction of tool calls that return
+data: **1 = all succeeded; 0 = all failed**. No tool calls means no score.
 
-Run this baseline before applying the ticker fix in step 10. If this checkout already
-has normalization in `_invoke_tool`, use a fresh workshop checkout for the baseline.
+It catches error payloads, but cannot tell whether a successful lookup used the right
+share class. Check the ticker too. A second scorer, `response_grounded_in_data`, judges
+whether the answer includes supporting figures.
 
-`qa_eval.py` runs the agent over your dataset and scores each run with
-`tool_call_succeeded` (the share of tool calls that returned data) and
-`response_grounded_in_data` (an LLM judge: does the answer cite real figures?).
+## 9. Run the baseline
+
+Run this **before fixing the code**:
+
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
+bt experiments view
 ```
 
-When the eval completes, view the results. Look at `tool_call_succeeded` — it should be
-low, because the dataset contains turns where dotted ticker lookups failed. The model may
-recover on some runs, so the baseline need not be zero.
+Select the new experiment and note its name and `tool_call_succeeded` score. Some
+lookups may recover, so the baseline need not be zero.
 
 ## 10. Fix the agent
 
-Start your coding agent again, then instruct it to do the following:
-```text
-Fix the dotted share-class ticker failure investigated in step 6. Normalize the ticker once in agent.py::_invoke_tool before either stock tool runs (BRK.B → BRK-B, HEI.A → HEI-A), preserving the requested share class. Don't change the tool functions.
-```
-When your coding agent is done, exit with Ctrl + C.
+Ask your coding agent:
 
-Run the agent again and pick the **"Should I buy BRK.B right now?"** starting point (or
-ask about any class share yourself):
+```text
+Fix the dotted share-class ticker failure from step 6. Normalize the ticker once in src/super_stonks/agent/agent.py::_invoke_tool before either stock tool runs (BRK.B -> BRK-B, HEI.A -> HEI-A), preserving the requested share class. Do not change the tool functions or analyze_stock_buy.
+```
+
+Exit your coding agent, then restart the app:
+
 ```bash
 make agent
 ```
 
-When done, interrupt the agent with Ctrl + C, then view the interaction(s) in the console.
-Look at the tool span: it should now contain real data instead of "No data found".
+Ask **“Should I buy BRK.B right now?”** Stop with **Ctrl+C**, then inspect the tool span:
+
 ```bash
 bt view logs
 ```
 
-## 11. Evaluate the updated agent against the baseline
+Check that the tool received `BRK-B` and returned data for that share class.
 
-With the fix in place, run the eval experiment again.
+## 11. Compare with the baseline
+
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
+bt experiments view
 ```
 
-The new experiment should score much higher on `tool_call_succeeded` than the baseline
-(and on grounding, since the answers now have real data to cite).
+Select the new experiment. Compare its scores with your baseline; tool success should
+improve. Inspect any remaining failures and confirm the requested share class is preserved.
 
-## 12. Enable online scoring for the new scorer
+## 12. Enable online scoring
 
-First, push the scorer to your Braintrust project so a versioned copy is available across
-the team:
+Publish the same tool-success check to your project:
+
 ```bash
 make push-scorer
-```
-
-Review the scorer you just pushed. Select `tool_call_succeeded` when prompted.
-```bash
 bt scorers view
 ```
 
-Now turn the scorer on for live traffic. Every tool span logged to your project will be
-scored as it arrives — so if a ticker format ever starts failing again, you'll see it.
+Select `tool_call_succeeded` to review it, then enable it on every new tool span:
+
 ```bash
 make automations
 ```
 
 ## 13. Validate
 
-Run the agent again to generate fresh traffic, including a class-share question:
 ```bash
 make agent
 ```
 
-When done, interrupt the agent with Ctrl + C, then view the `tool_call_succeeded` score on
-the new trace's tool spans:
+Ask both questions to exercise both tools:
+
+- **“Should I buy BRK.B right now?”** → `analyze_stock_buy`
+- **“How has BRK.B performed today and this week?”** → `get_stock_performance`
+
+Stop with **Ctrl+C**, then open the new traces:
+
 ```bash
 bt view logs
 ```
 
-Online scores may take a little time to appear. Or list your tool calls with their
-scores in one table (this optional command requires `jq`):
-```bash
-PID=$(bt projects list --json | jq -r --arg p "$BRAINTRUST_DEFAULT_PROJECT" '.[] | select(.name==$p) | .id')
-bt sql "SELECT created, span_attributes.name AS tool, input.ticker AS ticker,
-               scores.tool_call_succeeded AS score
-        FROM project_logs('$PID')
-        WHERE span_attributes.type = 'tool' AND created >= NOW() - INTERVAL 1 DAY
-        ORDER BY created DESC LIMIT 20"
-```
-
-Congratulations, you have just executed the Braintrust flywheel!
+Check each tool span: ticker **`BRK-B`**, data returned, and **`tool_call_succeeded = 1`**.
+Online scores may take a few minutes; reopen the trace if needed. If the score is 0,
+inspect the tool output before continuing.

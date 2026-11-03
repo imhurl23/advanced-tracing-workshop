@@ -22,6 +22,7 @@ env/
 .env
 .env.*
 !.env.example
+.braintrust.json
 .streamlit/secrets.toml
 
 # Streamlit/local app state

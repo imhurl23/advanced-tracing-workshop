@@ -2,6 +2,8 @@
 
 ## While you get settled, install these tools:
 
+Participants inspect Braintrust with `bt` in the terminal. Instructors will cover the Braintrust UI, but participant interactions will stay in terminal. 
+
 ### 1. Braintrust CLI (`bt`)
 
 ```bash
@@ -29,5 +31,9 @@ uv --version
 ### 3. Clone the workshop repo
 
 ```bash
-git clone git@github.com:imhurl23/advanced-tracing-workshop.git && cd advanced-tracing-workshop
+git clone https://github.com/imhurl23/advanced-tracing-workshop.git
+cd advanced-tracing-workshop
+make setup
 ```
+
+Continue with [Participant Guide, step 2](PARTICIPANT.md#2-configure) to fill in `.env`.
