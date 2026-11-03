@@ -1,7 +1,9 @@
 import json
 import logging
+from pathlib import Path
 
 import braintrust
+from dotenv import dotenv_values
 from langgraph.graph import END, StateGraph
 from openai import OpenAI
 
@@ -13,8 +15,15 @@ _PARENT_TOOLS_SPEC = TOOLS_SPEC
 
 logger = logging.getLogger(__name__)
 
+# The OpenAI client always reads its key + base URL from the repo's .env (the Braintrust
+# gateway), so a stray OPENAI_API_KEY in the user's shell can't take over. Falls back to
+# the environment if .env is missing or leaves them unset.
+_ENV = dotenv_values(Path(__file__).resolve().parents[3] / ".env")
+
 # wrap_openai ensures every chat.completions.create call becomes a child LLM span
-_client = braintrust.wrap_openai(OpenAI())
+_client = braintrust.wrap_openai(
+    OpenAI(api_key=_ENV.get("OPENAI_API_KEY") or None, base_url=_ENV.get("OPENAI_BASE_URL") or None)
+)
 
 _SYSTEM_PROMPT = STOCK_CHAT_SYSTEM
 
@@ -77,10 +86,8 @@ def agent_node(state: AgentState) -> dict:
 
 
 def _invoke_tool(fn_name: str, fn_args: dict) -> dict:
-    # THE GAP (workshop): route disabled alongside the commented-out tool spec in
-    # tools.py. Uncomment both to close the gap and let the agent fetch real prices.
-    # if fn_name == "get_stock_performance":
-    #     return get_stock_performance(**fn_args)
+    if fn_name == "get_stock_performance":
+        return get_stock_performance(**fn_args)
     if fn_name == "analyze_stock_buy":
         return analyze_stock_buy(**fn_args)
     return {"error": f"Unknown tool: {fn_name}"}

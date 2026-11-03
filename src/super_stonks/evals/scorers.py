@@ -2,13 +2,15 @@
 
 Two paths, one source of truth (`judge_prompts.py`):
 
-- **Online** scorers are registered as Braintrust *prompt* scorers in `push_assets.py`
-  (no code here runs online).
+- **Online** scorers are registered in `push_assets.py` (the tool-success check runs
+  there as a code scorer, sharing `tool_checks.py` with this module).
 - **Offline** — this module builds `autoevals.LLMClassifier`s from the same prompt
   strings, plus pure-Python code scorers, for use in the `Eval` (`qa_eval.py`).
 
-`response_grounded_in_data` is the grounding gap-detector — defined here for the offline
-experiment, but intentionally NOT pushed online until the workshop's reveal.
+`tool_call_succeeded` is the workshop scorer: it catches tools returning `{"error": …}`
+(e.g. dotted share-class tickers). It's pushed online as a code scorer on tool spans
+(`push_assets.py`, `make automations`). `response_grounded_in_data` is a secondary
+LLM judge used offline.
 """
 
 import re
@@ -18,6 +20,7 @@ from autoevals import LLMClassifier
 from openai import AsyncOpenAI
 from pydantic import BaseModel
 
+from .tool_checks import ticker_of, tool_call_ok
 from .judge_prompts import (
     CONVERSATION_QUALITY_PROMPT,
     GRANULAR_SCORES,
@@ -51,24 +54,26 @@ async def tool_ticker_valid(input, output):
     }
 
 
-async def tool_returned_data(input, output, trace=None):
-    """Tool call returned real price data, not an error response."""
-    tool_spans = await trace.get_spans(span_type=["tool"])
-    if not tool_spans:
-        return {
-            "name": "tool_returned_data",
-            "score": 0.0,
-            "metadata": {"has_error": False, "has_price": False},
-        }
+async def tool_call_succeeded(input, output, trace=None):
+    """Every tool call in the trace returned data, not an `{"error": …}` payload.
 
-    tool_span = next((s for s in tool_spans if s.output), None)
-    out = (tool_span.output if tool_span else None) or {}
-    has_error = "error" in out
-    has_price = "current_price" in out
+    Score = share of tool calls that succeeded (1.0 = all of them). Skipped (None) when no
+    tool fired. Spans whose output isn't available yet are left out. Online, the same check
+    (`tool_checks.tool_call_ok`) runs per tool span — see push_assets.py."""
+    tool_spans = await trace.get_spans(span_type=["tool"]) if trace else []
+    judged = [s for s in tool_spans if tool_call_ok(s.output) is not None]
+    if not judged:
+        return {"name": "tool_call_succeeded", "score": None,
+                "metadata": {"tool_calls": len(tool_spans), "unjudged": len(tool_spans)}}
+    failed = [s for s in judged if not tool_call_ok(s.output)]
     return {
-        "name": "tool_returned_data",
-        "score": 1.0 if has_price and not has_error else 0.0,
-        "metadata": {"has_error": has_error, "has_price": has_price},
+        "name": "tool_call_succeeded",
+        "score": 1 - len(failed) / len(judged),
+        "metadata": {
+            "tool_calls": len(tool_spans),
+            "unjudged": len(tool_spans) - len(judged),
+            "failed": [{"ticker": ticker_of(s.input), "output": s.output} for s in failed],
+        },
     }
 
 

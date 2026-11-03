@@ -1,11 +1,12 @@
-"""Turn on the online automation for the grounded scorer (`make automations`).
+"""Turn on the online automation for the tool-success scorer (`make automations`).
 
 The bt CLI can't create online-scoring automations, so this hits the REST API
 (`PUT /v1/project_score`). Push the scorer first (`make push-scorer`), which registers
-`response_grounded_in_data` as a prompt scorer in your project.
+`tool_call_succeeded` as a code scorer in your project.
 
-The automation scores **turn spans** (where input = the user question, output = the
-reply — exactly what the grounded prompt judges) at 100% in your own project.
+The automation scores **every tool span** (`span_attributes.type = 'tool'`) at 100% in
+your own project — each time a tool fires, it checks the tool returned data rather than
+an `{"error": …}` payload.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ load_dotenv()
 API = os.environ.get("BRAINTRUST_API_URL", "https://api.braintrust.dev").rstrip("/")
 KEY = os.environ["BRAINTRUST_API_KEY"]
 PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]
-SCORER_SLUG = "response_grounded_in_data"
+SCORER_SLUG = "tool_call_succeeded"
 _HEADERS = {"Authorization": f"Bearer {KEY}", "Content-Type": "application/json"}
 
 
@@ -58,18 +59,18 @@ def main() -> None:
     fn_id = _scorer_function_id(project_id)
     _req("PUT", "/v1/project_score", {
         "project_id": project_id,
-        "name": "grounded-in-tool-data",
-        "description": "Online grounding score on turn spans (workshop reveal).",
+        "name": "tool-call-succeeded",
+        "description": "Online tool-success score on every tool span (workshop reveal).",
         "score_type": "online",
         "config": {
             "online": {
                 "sampling_rate": 1.0,
                 "scorers": [{"type": "function", "id": fn_id}],
-                "btql_filter": "span_attributes.name ilike 'turn_%'",
+                "btql_filter": "span_attributes.type = 'tool'",
             }
         },
     })
-    print(f"[automations] online score 'grounded-in-tool-data' enabled on '{PROJECT}' (turn spans, 100%).")
+    print(f"[automations] online score 'tool-call-succeeded' enabled on '{PROJECT}' (tool spans, 100%).")
 
 
 if __name__ == "__main__":

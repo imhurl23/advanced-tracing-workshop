@@ -1,174 +1,193 @@
 # Super Stonks — Participant Guide
 
-Follow top to bottom. You **read** the shared, pre-seeded `super-stonks` project; you
-**write** (dataset, experiments, online score) to **your own** project.
+Follow top to bottom. Participants use **`bt` in the terminal** to inspect Braintrust;
+no Braintrust UI account is needed. Your coding agent uses `bt` too. Topics and Patterns
+screens are instructor demos. The stock-chat app opens locally in your browser.
+
+Read the pre-seeded **`super-stonks`** project. Write your traces, dataset, experiments,
+and online score to **your own project**. Do not run the seeding commands.
 
 ## 1. Install
 
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh          # uv
-curl -fsSL https://bt.dev/cli/install.sh | bash          # bt
-bt --version                                             # verify installation and version >= 0.15.1
-brew install gh                                          # gh (or: winget install GitHub.cli)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -fsSL https://bt.dev/cli/install.sh | bash
+```
+
+Open a new terminal, then check both tools. Use `bt` 0.28.1 or newer.
+
+```bash
+uv --version
+bt --version
 ```
 
 ## 2. Configure
 
 ```bash
-git clone git@github.com:spencerseale/advanced-tracing-workshop.git && cd advanced-tracing-workshop
-make setup  # uv sync + creates .env
+git clone https://github.com/imhurl23/advanced-tracing-workshop.git
+cd advanced-tracing-workshop
+make setup
 ```
 
-Fill in the .env file with the two keys from the workshop:
+`make setup` creates `.env` with these defaults. Existing `.env` files are kept.
+Open it and replace only the API key and `<your-name>`:
 
 ```bash
-# .env — paste the two keys from the workshop:
-#   OPENAI_API_KEY=...
-#   BRAINTRUST_API_KEY=...
+# .env
+BRAINTRUST_API_KEY="<paste your Braintrust API key>"
+OPENAI_BASE_URL="https://gateway.braintrust.dev"
+OPENAI_API_KEY="${BRAINTRUST_API_KEY}"
+
+BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
+BRAINTRUST_ORG_NAME="dataoutpost-workshop"
 ```
 
-Run the following command, then use the arrow keys to select `API Key` as the auth method. Paste your Braintrust API key to create the new login.
+Load it in **every new terminal**, before starting your coding agent:
+
 ```bash
-bt auth login
+set -a; source .env; set +a
 ```
 
-Quickly verify a new profile was successfully created.
-```bash
-bt auth profiles
-```
-You should see an output like `✓ workshop-advanced-tracing — api_key — org: workshop-advanced-tracing — sk-****gYyeM`.
+Only one API key is needed. If using Codex through the Braintrust gateway, follow
+[`CODEX.md`](CODEX.md). MCP setup is optional; the prompts below use `bt`.
 
-Next, set the following so future commands have the right context to execute. Replace `<your-name>` with your name so you get your own project.
-```bash
-export BRAINTRUST_PROFILE="workshop-advanced-tracing"
-export BRAINTRUST_DEFAULT_PROJECT="<your-name>-stonks"
-```
+## 3. Run the agent and view your trace
 
-Next, set up the Braintrust skills so coding agents know exactly how to interact with `bt`. Select `local` as the scope, press "Enter" to accept the default workflow docs, and choose the coding agent of your choice. We will be using Claude in this workshop, but all should work the same way.
-```bash
-bt setup skills 
-```
-
-Fetch the `agent-auto-improvement` skill from the Braintrust skills repository. Select `Project` as the installation scope.
-```bash
-gh skill install braintrustdata/braintrust-skills agent-auto-improvement --agent claude-code
-```
-
-## 3. Run the agent, see your trace
-
-This repository contains a simple agent you'll use throughout to generate traces and interact with. Use the `make` command to launch it. It will open in your browser.
-
-> **Note:** make sure you have `BRAINTRUST_API_KEY` and `OPENAI_API_KEY` set in `.env`, otherwise you will run into issues.
 ```bash
 make agent
 ```
-Once the Streamlit app opens and loads, ask a question in the chat input or select a "Starting point" from the left. When you've done some interacting, interrupt the app with Ctrl + C.
 
-With some interactions logged, use the following to view your traces in the console.
+In the local app, ask: **“Should I buy, hold, or sell MSFT right now?”**
+Stop the app with **Ctrl+C** in the terminal, then inspect the trace:
+
 ```bash
 bt view logs
 ```
+
+Compare the question, tool calls, and reply. A completed trace does not guarantee a
+correct answer.
 
 ## 4. Explore Topics on the shared seed
 
-> **Note:** participants do not have access to the Braintrust UI, so this is instructor led.
-```bash
-bt topics open --project super-stonks
+Watch the instructor open Topics for `super-stonks`. Topics groups traces by what users
+ask for, such as stock research or price checks. It does not tell us whether answers
+are correct.
+
+## 5. Find the problem with Patterns
+
+Watch the instructor open Patterns for `super-stonks`. Patterns finds recurring
+problems and links to examples, including failures with no span error.
+
+Find the pattern about dotted share-class tickers.
+
+## 6. Investigate with your coding agent
+
+Start your coding agent from this terminal, in this repository. Ask:
+
+```text
+Use the bt CLI to find the pattern about dotted share-class tickers in 'super-stonks'. Pull a representative sample of its traces. Compare the user's question, the ticker passed to each tool, and the tool's output. What is the root cause? Do not change code yet.
 ```
 
-Target the **"Current stock price analysis"** cluster.
+Discuss the evidence before continuing. A tool can return `{"error": "No data found..."}`
+without raising an exception. Patterns connects those failures across requests.
 
-## 5. Investigate it with your coding agent
+## 7. Create your dataset
+
+Exit your coding agent. Collect the pattern's failing turns into your own project:
+
+```bash
+make curate-dataset
+bt datasets view share-class-tickers
+```
+
+Each row contains the question, broken reply, failing tool call, and source trace.
+
+## 8. Understand the scorer
+
+**Nothing to select or configure.** The eval already uses `tool_call_succeeded` from
+`src/super_stonks/evals/scorers.py`. It measures the fraction of tool calls that return
+data: **1 = all succeeded; 0 = all failed**. No tool calls means no score.
+
+It catches error payloads, but cannot tell whether a successful lookup used the right
+share class. Check the ticker too. A second scorer, `response_grounded_in_data`, judges
+whether the answer includes supporting figures.
+
+## 9. Run the baseline
+
+Run this **before fixing the code**:
+
+```bash
+uv run bt eval src/super_stonks/evals/qa_eval.py
+bt experiments view
+```
+
+Select the new experiment and note its name and `tool_call_succeeded` score. Some
+lookups may recover, so the baseline need not be zero.
+
+## 10. Fix the agent
 
 Ask your coding agent:
+
 ```text
-How are traces performing in the "Current stock price analysis" topic cluster in 'super-stonks'? Pull a representative sample, compare what the user asked vs. how the agent responded.
-```
-Accept the dialogs while observing what Claude does to answer the question.
-
-It should find the gap: price questions the agent can't answer — no realtime-price tool.
-
-## 6. Curate the traces from the cluster into your dataset
-
-Now, add 10 traces to a dataset in your own project for offline evaluation. Prompt your coding agent to do this.
-```text
-/agent-auto-improvement Capture 10 traces from the "Current stock price analysis" cluster as a dataset 'current-price-gap-offline' — the failure taxonomy/metadata is the price gap. Use /braintrust skill to capture traces and create a dataset.
-```
-As before, accept the dialogs while observing what Claude is doing.
-
-Once the dataset is created, exit Claude with Ctrl + C, then view it with:
-```bash
-bt datasets view current-price-gap-offline
+Fix the dotted share-class ticker failure from step 6. Normalize the ticker once in src/super_stonks/agent/agent.py::_invoke_tool before either stock tool runs (BRK.B -> BRK-B, HEI.A -> HEI-A), preserving the requested share class. Do not change the tool functions or analyze_stock_buy.
 ```
 
-## 7. Select a scorer and push it to your project
+Exit your coding agent, then restart the app:
 
-Evals require at least one scorer. We've already defined the scorer in the code, and we can push scorers to our Braintrust project. This ensures versioned scorers are available across the team.
-```bash
-make push-scorer
-```
-
-Let's review the scorer we just pushed to our project. Select `response_grounded_in_data` when prompted.
-```bash
-bt scorers view
-```
-
-## 8. Baseline experiment (tool OFF)
-
-`qa_eval.py` runs the agent over your dataset and scores each answer with the grounding
-judge. Use the following command to run your eval.
-```bash
-EVAL_DATASET=current-price-gap-offline uv run bt eval src/super_stonks/evals/qa_eval.py
-```
-
-When the eval completes, view the results. Specifically, look for the scores from the scorer you just added, `response_grounded_in_data`.
-
-## 9. Close the gap
-
-The agent is missing a tool that can pull real-time stock prices from Yahoo Finance. We've already written this tool in the code, but it is currently disabled (commented out). `GAP.md` specifies exactly where to uncomment it so the tool is usable by the agent.
-
-Start your coding agent again, then instruct it to do the following:
-```text
-Fill the tool gap @GAP.md.
-```
-When your coding agent is done, the tool should now be included in the agent's tools list. Exit with Ctrl + C.
-
-Run the agent again, then generate fresh traffic by conversing with it:
 ```bash
 make agent
 ```
 
-When done, interrupt the agent with Ctrl + C, then view the interaction(s) in the console. Look specifically for the new tool spans.
+Ask **“Should I buy BRK.B right now?”** Stop with **Ctrl+C**, then inspect the tool span:
+
 ```bash
 bt view logs
 ```
 
-## 10. A/B test the updated agent against the previous version
+Check that the tool received `BRK-B` and returned data for that share class.
 
-With the new tool available to the agent, run the eval experiment again.
+## 11. Compare with the baseline
+
 ```bash
-EVAL_DATASET=current-price-gap-offline uv run bt eval src/super_stonks/evals/qa_eval.py
+uv run bt eval src/super_stonks/evals/qa_eval.py
+bt experiments view
 ```
 
-The new experiment should have a higher grounding score than the previous one. This is a good sign that the tool is working and the agent is able to use it.
+Select the new experiment. Compare its scores with your baseline; tool success should
+improve. Inspect any remaining failures and confirm the requested share class is preserved.
 
-## 11. Enable online scoring automation for the new scorer
+## 12. Enable online scoring
 
-Now we want to enable online scoring automation for the new scorer. This will automatically score new traces as they are logged to Braintrust, protecting us from regressions in the future.
+Publish the same tool-success check to your project:
+
+```bash
+make push-scorer
+bt scorers view
+```
+
+Select `tool_call_succeeded` to review it, then enable it on every new tool span:
+
 ```bash
 make automations
 ```
 
-## 12. Validate
+## 13. Validate
 
-Run the agent again to generate fresh traffic:
 ```bash
 make agent
 ```
 
-When done, interrupt the agent with Ctrl + C, then view the scoring added to the new trace in the logs:
+Ask both questions to exercise both tools:
+
+- **“Should I buy BRK.B right now?”** → `analyze_stock_buy`
+- **“How has BRK.B performed today and this week?”** → `get_stock_performance`
+
+Stop with **Ctrl+C**, then open the new traces:
+
 ```bash
 bt view logs
 ```
 
-Congratulations, you have just executed the Braintrust flywheel!
+Check each tool span: ticker **`BRK-B`**, data returned, and **`tool_call_succeeded = 1`**.
+Online scores may take a few minutes; reopen the trace if needed. If the score is 0,
+inspect the tool output before continuing.

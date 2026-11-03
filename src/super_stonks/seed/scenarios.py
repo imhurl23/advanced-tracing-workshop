@@ -1,8 +1,8 @@
 """Seed scenarios — a weighted mix of user questions for the Super Stonks agent.
 
-~20% are realtime-price asks: THE GAP. With `get_stock_performance` commented out the
-agent can't answer them, so they cluster in Topics and (once the grounding scorer is
-built) score low. The rest give the project realistic variety.
+~12% are share-class / renamed tickers typed the way users do (BRK.B, SQ). Yahoo only
+knows the dash form (BRK-B), so the tools return "No data found" as a normal result —
+the silent failure Patterns surfaces. The rest give the project realistic variety.
 
 `build(count)` returns a list of `{"bucket": str, "turns": [user_msg, ...]}` — one entry
 per session/trace. Deterministic given `seed` so runs are reproducible.
@@ -14,14 +14,24 @@ TICKERS = ["AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "NFLX
 
 # (bucket, weight, templates). {t}/{t2} are filled with tickers.
 _BUCKETS = [
-    ("realtime_price", 0.20, [   # THE GAP — no tool to answer these
+    ("realtime_price", 0.20, [
         "What is {t} trading at right now?",
         "Give me the current share price of {t}.",
         "How much is {t} stock today?",
         "What's the latest price on {t}?",
         "Quote for {t}?",
     ]),
-    ("research", 0.22, [
+    ("share_class", 0.12, [   # class-share / renamed tickers, as users actually type them
+        "Should I buy BRK.B right now?",
+        "Is Berkshire Hathaway (BRK.B) a good buy at the moment?",
+        "Give me a buy/hold/sell call on BF.B.",
+        "What do the technicals say about Brown-Forman BF.B?",
+        "Should I buy, hold, or sell HEI.A?",
+        "Give me a buy/hold/sell call on Block (SQ).",
+        "Is SQ a buy right now?",
+        "What do the technicals say about LEN.B?",
+    ]),
+    ("research", 0.16, [
         "Should I buy, hold, or sell {t} right now?",
         "Is {t} a good buy at the moment?",
         "Give me a buy/hold/sell call on {t} with the signals.",
@@ -36,7 +46,7 @@ _BUCKETS = [
         "Compare {t} and {t2}.",
         "Which is the better buy, {t} or {t2}?",
     ]),
-    ("concept", 0.20, [
+    ("concept", 0.14, [
         "Explain what a P/E ratio means.",
         "What's the difference between an ETF and a mutual fund?",
         "How do dividends work?",
@@ -76,7 +86,7 @@ def _fill(template: str, rng: random.Random) -> str:
 
 def build(count: int, seed: int = 0) -> list[dict]:
     """Proportional (stratified) allocation, so even a 10-trace smoke gets its share of
-    every bucket — including the realtime-price gap — instead of an unlucky random draw
+    every bucket — including the share-class tickers — instead of an unlucky random draw
     dropping it entirely."""
     rng = random.Random(seed)
 
