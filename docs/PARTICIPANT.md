@@ -94,13 +94,16 @@ error. Open the Patterns page for `super-stonks`:
 https://www.braintrust.dev/app/dataoutpost-workshop/p/super-stonks/patterns
 ```
 
-Target the **"Stock analysis rejects dotted share-class tickers"** pattern.
+Target the dotted share-class ticker pattern, currently titled
+**"Dotted tickers fail or change share classes"**. Its stable ID is
+`b2c6500a-00ec-480f-a5ce-ed9456b6bd76`. Patterns generates and updates titles, so the
+wording may change; the ID identifies the workshop record.
 
 ## 6. Investigate it with your coding agent
 
 Ask your coding agent:
 ```text
-Use the Braintrust MCP server to find the "Stock analysis rejects dotted share-class tickers" pattern in 'super-stonks'. Pull a representative sample of its traces and compare what the user asked, which ticker the agent passed to its tools, and what the tools returned. What's the root cause?
+Use the Braintrust MCP server to find pattern ID b2c6500a-00ec-480f-a5ce-ed9456b6bd76 in 'super-stonks' (currently titled "Dotted tickers fail or change share classes"). Pull a representative sample of its traces and compare what the user asked, which ticker the agent passed to its tools, and what the tools returned. What's the root cause?
 ```
 Accept the dialogs while observing what your agent does to answer the question.
 
@@ -118,6 +121,12 @@ broken reply and failing tool call in the metadata:
 make curate-dataset
 ```
 
+The command selects the shared pattern by its stable ID, so title changes do not
+affect this step. Keep the default dataset name `share-class-tickers`; step 9 uses it
+automatically. Instructors replacing the seed pattern can set `PATTERN_ID` to the new
+record ID. `PATTERN` also supports an explicit, unique name substring; `PATTERN_ID`
+takes precedence when both are set.
+
 View it with:
 ```bash
 bt datasets view share-class-tickers
@@ -132,6 +141,9 @@ step 12 for online scoring.
 
 ## 9. Baseline experiment
 
+Run this baseline before applying the ticker fix in step 10. If this checkout already
+has normalization in `_invoke_tool`, use a fresh workshop checkout for the baseline.
+
 `qa_eval.py` runs the agent over your dataset and scores each run with
 `tool_call_succeeded` (the share of tool calls that returned data) and
 `response_grounded_in_data` (an LLM judge: does the answer cite real figures?).
@@ -140,13 +152,14 @@ uv run bt eval src/super_stonks/evals/qa_eval.py
 ```
 
 When the eval completes, view the results. Look at `tool_call_succeeded` — it should be
-low, because every row in this dataset is a ticker the tools can't look up.
+low, because the dataset contains turns where dotted ticker lookups failed. The model may
+recover on some runs, so the baseline need not be zero.
 
 ## 10. Fix the agent
 
 Start your coding agent again, then instruct it to do the following:
 ```text
-Fix the "Stock analysis rejects dotted share-class tickers" pattern. Normalize the ticker once in agent.py::_invoke_tool before either tool runs — don't change the tool functions.
+Fix the dotted share-class ticker failure investigated in step 6. Normalize the ticker once in agent.py::_invoke_tool before either stock tool runs (BRK.B → BRK-B, HEI.A → HEI-A), preserving the requested share class. Don't change the tool functions.
 ```
 When your coding agent is done, exit with Ctrl + C.
 
@@ -204,7 +217,8 @@ the new trace's tool spans:
 bt view logs
 ```
 
-Or list your tool calls with their scores in one table:
+Online scores may take a little time to appear. Or list your tool calls with their
+scores in one table (this optional command requires `jq`):
 ```bash
 PID=$(bt projects list --json | jq -r --arg p "$BRAINTRUST_DEFAULT_PROJECT" '.[] | select(.name==$p) | .id')
 bt sql "SELECT created, span_attributes.name AS tool, input.ticker AS ticker,

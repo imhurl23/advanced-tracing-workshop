@@ -21,8 +21,9 @@ fix with two experiments, and promotes the scorer to an online score.
    share-class or renamed tickers the way users type them (`BRK.B`, `BF.B`, `HEI.A`,
    `LEN.B`, `SQ`). Yahoo/yfinance only knows the dash form (`BRK-B`), so the tools return
    `{"error": "No data found …"}` as a **normal result** — no span error.
-2. **Patterns runs** (daily) and records the recurring failure — *"Stock analysis rejects
-   dotted share-class tickers"* — without being told what to look for (`PARTICIPANT.md` step 5).
+2. **Patterns runs** (daily) and records the dotted share-class failure without being
+   told what to look for. Titles can change; `PARTICIPANT.md` step 5 identifies the
+   shared workshop record by its stable ID.
 3. **Investigate it** with a coding agent via the Braintrust MCP + `bt` (step 6).
 4. **Curate** the pattern's traces into a dataset in each attendee's own project (step 7).
 5. **Push the scorer** that catches it — `tool_call_succeeded`, a code check that each
@@ -224,7 +225,7 @@ produces):
 | [x] | `seed/scenarios.py` defines the use-case mix (below) | stratified, so even a 10-trace smoke includes every bucket |
 | [x] | `seed/seed.py` runs sessions through the real `graph` | span tree matches prod; random mix per run, `--seed N` to reproduce |
 | [x] | Seeded `super-stonks` | 200 sessions so far |
-| [x] | Patterns found it | *"Stock analysis rejects dotted share-class tickers"* + *"Block analysis fails for SQ ticker requests"* |
+| [x] | Patterns found it | Originally observed as *"Stock analysis rejects dotted share-class tickers"* + *"Block analysis fails for SQ ticker requests"*. Titles are generated; use the current record ID in `PARTICIPANT.md`. |
 | [ ] | Top-up the day before the workshop | `BRAINTRUST_DEFAULT_PROJECT=super-stonks make top-up COUNT=100` |
 
 **Use-case mix:**
@@ -294,7 +295,7 @@ shared by both paths:
 
 | Status | Task | Notes |
 |---|---|---|
-| [x] | `make curate-dataset` → dataset from the Pattern's evidence (step 7) | `provision/curate_dataset.py`: reads the Pattern from `project_patterns()`, runs its `affected_filter` over the logs, writes one row per failing turn with `bt datasets create`/`update`. Default `PATTERN=share-class`, `DATASET=share-class-tickers`; refuses to write into `super-stonks` |
+| [x] | `make curate-dataset` → dataset from the Pattern's evidence (step 7) | `provision/curate_dataset.py`: reads the Pattern from `project_patterns()`, runs its `affected_filter` over the logs, writes one row per failing turn with `bt datasets create`/`update`. Default pattern ID `b2c6500a-00ec-480f-a5ce-ed9456b6bd76` (title may change), `DATASET=share-class-tickers`; refuses to write into `super-stonks` |
 | [x] | `evals/qa_eval.py` — `Eval()` wrapping `graph` | scores `tool_call_succeeded` + `response_grounded_in_data`; dataset via `EVAL_DATASET` (default `share-class-tickers`) |
 | [ ] | **Experiment 1 (as typed):** `bt eval src/super_stonks/evals/qa_eval.py` | low — the baseline |
 | [ ] | **Fix:** normalize tickers in `agent.py::_invoke_tool` | `.` → `-`, plus `{"SQ": "XYZ"}` |
@@ -329,7 +330,7 @@ make seed                  # COUNT traces (default 500)
 make top-up COUNT=100      # the day before — keeps the Patterns active
 
 # --- live arc ---
-# step 5  Patterns → "Stock analysis rejects dotted share-class tickers"
+# step 5  Patterns → dotted share-class failure (see PARTICIPANT.md for the stable ID)
 # step 6  investigate with the coding agent (Braintrust MCP + bt)
 make curate-dataset        # step 7: the Pattern's evidence → dataset (own project)
 bt eval src/super_stonks/evals/qa_eval.py   # Experiment 1 → low

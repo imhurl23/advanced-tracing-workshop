@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 from super_stonks.evals.tool_checks import ticker_of, tool_call_ok
 
-PROJECT = os.environ.get("BRAINTRUST_DEFAULT_PROJECT", "super-stonks")
+PROJECT = os.environ["BRAINTRUST_DEFAULT_PROJECT"]
 project = projects.create(name=PROJECT)
 
 
