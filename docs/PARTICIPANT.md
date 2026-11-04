@@ -48,8 +48,15 @@ Load it in **every new terminal**, before starting your coding agent:
 set -a; source .env; set +a
 ```
 
-Only one API key is needed. If using Codex through the Braintrust gateway, follow
-[`CODEX.md`](CODEX.md). MCP setup is optional; the prompts below use `bt`.
+If you don't have a coding agent, you can use Codex through the Braintrust gateway, follow
+[`CODEX.md`](CODEX.md) to configure it.
+
+Connect your coding agent to the Braintrust MCP server (step 6 uses it). Follow the guide
+for your agent:
+
+- **Claude Code:** [`claude-code-mcp.md`](claude-code-mcp.md)
+- **Codex:** [`codex-mcp.md`](codex-mcp.md)
+- **Cursor:** [`cursor-mcp.md`](cursor-mcp.md)
 
 ## 3. Run the agent and view your trace
 
@@ -85,7 +92,7 @@ Find the pattern about dotted share-class tickers.
 Start your coding agent from this terminal, in this repository. Ask:
 
 ```text
-Use the bt CLI to find the pattern about dotted share-class tickers in 'super-stonks'. Pull a representative sample of its traces. Compare the user's question, the ticker passed to each tool, and the tool's output. What is the root cause? Do not change code yet.
+Use the Braintrust MCP server to find the pattern about dotted share-class tickers in 'super-stonks'. Pull a representative sample of its traces. Compare the user's question, the ticker passed to each tool, and the tool's output. What is the root cause? Do not change code yet.
 ```
 
 Discuss the evidence before continuing. A tool can return `{"error": "No data found..."}`
