@@ -109,23 +109,27 @@ bt datasets view share-class-tickers
 
 Each row contains the question, broken reply, failing tool call, and source trace.
 
-## 8. Understand the scorer
+## 8. Understand the scorers
 
-**Nothing to select or configure.** The eval already uses `tool_call_succeeded` from
-`src/super_stonks/evals/scorers.py`. It measures the fraction of tool calls that return
-data: **1 = all succeeded; 0 = all failed**. No tool calls means no score.
+We will use two scorers for our eval, both defined in `src/super_stonks/evals/scorers.py`:
 
-It catches error payloads, but cannot tell whether a successful lookup used the right
-share class. Check the ticker too. A second scorer, `response_grounded_in_data`, judges
-whether the answer includes supporting figures.
+- **`tool_call_succeeded`** (code) — the fraction of tool calls that returned data rather
+  than an `{"error": ...}` payload: **1 = all succeeded; 0 = all failed**. No tool calls
+  means no score. It catches error payloads, but cannot tell whether a successful lookup
+  used the right share class, so check the ticker too.
+- **`response_grounded_in_data`** (LLM judge) — grades whether the final answer gives
+  concrete market figures, such as a price or percentage move, instead of deflecting or
+  answering from general knowledge. Scores run from 0 to 1.
 
-## 9. Run the baseline
+`tool_call_succeeded` is the one tied to this failure; you'll push it for online scoring
+in step 12.
+
+## 9. Run the baseline eval
 
 Run this **before fixing the code**:
 
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
-bt experiments view
 ```
 
 Select the new experiment and note its name and `tool_call_succeeded` score. Some
@@ -157,7 +161,6 @@ Check that the tool received `BRK-B` and returned data for that share class.
 
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
-bt experiments view
 ```
 
 Select the new experiment. Compare its scores with your baseline; tool success should
