@@ -1,8 +1,8 @@
 # Super Stonks — Participant Guide
 
 Follow top to bottom. Participants use **`bt` in the terminal** to inspect Braintrust;
-no Braintrust UI account is needed. Your coding agent uses `bt` too. Topics and Patterns
-screens are instructor demos. The stock-chat app opens locally in your browser.
+no Braintrust UI account is needed. Your coding agent uses `bt` and the MCP server to query Braintrust. 
+Topics and Patterns screens are instructor demos. The stock-chat app opens locally in your browser.
 
 Read the pre-seeded **`super-stonks`** project. Write your traces, dataset, experiments,
 and online score to **your own project**. Do not run the seeding commands.
