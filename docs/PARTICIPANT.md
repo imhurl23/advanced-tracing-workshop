@@ -140,24 +140,14 @@ lookups may recover, so the baseline need not be zero.
 Ask your coding agent:
 
 ```text
-Fix the dotted share-class ticker failure from step 6. Normalize the ticker once in src/super_stonks/agent/agent.py::_invoke_tool before either stock tool runs (BRK.B -> BRK-B, HEI.A -> HEI-A), preserving the requested share class. Do not change the tool functions or analyze_stock_buy.
+Fix the dotted share-class ticker failure. Normalize the ticker once in src/super_stonks/agent/agent.py::_invoke_tool before either stock tool runs (BRK.B -> BRK-B, HEI.A -> HEI-A), preserving the requested share class. Do not change the tool functions or analyze_stock_buy.
 ```
 
-Exit your coding agent, then restart the app:
+Exit your coding agent.
 
-```bash
-make agent
-```
+## 11. Compare the fix with the baseline
 
-Ask **“Should I buy BRK.B right now?”** Stop with **Ctrl+C**, then inspect the tool span:
-
-```bash
-bt view logs
-```
-
-Check that the tool received `BRK-B` and returned data for that share class.
-
-## 11. Compare with the baseline
+Now using the same dataset, run the eval again to validate the fix.
 
 ```bash
 uv run bt eval src/super_stonks/evals/qa_eval.py
@@ -175,13 +165,13 @@ make push-scorer
 bt scorers view
 ```
 
-Select `tool_call_succeeded` to review it, then enable it on every new tool span:
+Select `tool_call_succeeded` to review it, then enable it to eval each new tool span:
 
 ```bash
 make automations
 ```
 
-## 13. Validate
+## 13. Validate the agent in production
 
 ```bash
 make agent
